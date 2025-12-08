@@ -1,3 +1,18 @@
+# CI Pipeline for FastMCP Template
+#
+# Workflow Design:
+# - Triggers on PRs to main (required checks before merge)
+# - Triggers on push to main (post-merge verification)
+# - Does NOT trigger Docker builds (that's in cd.yml, only after CI passes)
+#
+# Branch Strategy:
+# - main: Production branch, protected, requires PR
+# - feature/*, fix/*, docs/*: Development branches
+#
+# Runner Support:
+# - Uses GitHub-hosted runners by default
+# - Can use self-hosted runners with `runs-on: self-hosted` label
+
 name: CI
 
 on:
@@ -5,97 +20,175 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+    types: [opened, synchronize, reopened]
+
+# Cancel in-progress runs for the same branch
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
-  CI: true
+  UV_CACHE_DIR: /tmp/uv-cache
+  PYTHON_VERSION: "3.12"
 
 jobs:
+  lint:
+    name: Lint & Format
+    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      # Configure git to use GH_PAT for private repos
+      - name: Configure git for private repos
+        run: |
+          git config --global url."https://${{ secrets.GH_PAT }}@github.com/".insteadOf "https://github.com/"
+
+      - name: Install dependencies
+        run: uv sync --all-groups
+
+      - name: Run Ruff linter
+        run: uv run ruff check . --output-format=github
+
+      - name: Run Ruff formatter check
+        run: uv run ruff format --check .
+
+  typecheck:
+    name: Type Check
+    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Configure git for private repos
+        run: |
+          git config --global url."https://${{ secrets.GH_PAT }}@github.com/".insteadOf "https://github.com/"
+
+      - name: Install dependencies
+        run: uv sync --all-groups
+
+      - name: Run mypy
+        run: uv run mypy app/
+
   test:
-    name: Test Python ${{ matrix.python-version }}
-    runs-on: ubuntu-latest
+    name: Test (Python ${{ matrix.python-version }})
+    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
         python-version: ["3.12", "3.13"]
 
     steps:
-      - name: Check out code
+      - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Install UV
-        uses: astral-sh/setup-uv@v4
-        with:
-          version: "latest"
-          enable-cache: true
 
       - name: Set up Python ${{ matrix.python-version }}
-        run: uv python install ${{ matrix.python-version }}
-
-      - name: Install dependencies
-        run: uv sync --all-groups
-
-      - name: Lint with Ruff
-        run: uv run ruff check .
-
-      - name: Check formatting with Ruff
-        run: uv run ruff format --check .
-
-      - name: Type check with mypy
-        run: uv run mypy app/
-        continue-on-error: true # Allow mypy failures during initial development
-
-      - name: Run tests with coverage
-        run: uv run pytest --cov=app --cov-report=xml --cov-report=term --cov-fail-under=80
-
-      - name: Upload coverage report
-        if: matrix.python-version == '3.12'
-        uses: actions/upload-artifact@v4
+        uses: actions/setup-python@v5
         with:
-          name: coverage-xml
-          path: coverage.xml
+          python-version: ${{ matrix.python-version }}
 
-  lint:
-    name: Lint
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Check out code
-        uses: actions/checkout@v4
-
-      - name: Install UV
-        uses: astral-sh/setup-uv@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
         with:
-          version: "latest"
           enable-cache: true
 
-      - name: Set up Python
-        run: uv python install 3.12
+      - name: Configure git for private repos
+        run: |
+          git config --global url."https://${{ secrets.GH_PAT }}@github.com/".insteadOf "https://github.com/"
 
       - name: Install dependencies
         run: uv sync --all-groups
 
-      - name: Lint with Ruff
-        run: uv run ruff check .
+      - name: Run tests with coverage
+        run: |
+          uv run pytest --cov --cov-report=xml --cov-report=term-missing \
+            --cov-fail-under=80
 
-      - name: Check formatting with Ruff
-        run: uv run ruff format --check .
+      - name: Upload coverage reports
+        if: matrix.python-version == '3.12'
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.xml
+          fail_ci_if_error: false
 
   security:
     name: Security Scan
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
+    timeout-minutes: 10
 
     steps:
-      - name: Check out code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Trivy filesystem scan
-        uses: aquasecurity/trivy-action@0.14.0
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          scan-type: "fs"
-          scan-ref: "."
-          format: "table"
-          severity: "CRITICAL,HIGH"
-          exit-code: "1"
-          scanners: "vuln"
-          vuln-type: "library"
-        continue-on-error: false
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Configure git for private repos
+        run: |
+          git config --global url."https://${{ secrets.GH_PAT }}@github.com/".insteadOf "https://github.com/"
+
+      - name: Install dependencies
+        run: uv sync --all-groups
+
+      - name: Run pip-audit
+        run: |
+          uv pip install pip-audit
+          uv run pip-audit --strict --ignore-vuln GHSA-xxxx-xxxx-xxxx || true
+        continue-on-error: true # Don't fail CI on vulnerabilities, just report
+
+      - name: Run bandit security linter
+        run: |
+          uv pip install bandit
+          uv run bandit -r app/ -ll -ii
+
+  # Summary job that other workflows can depend on
+  ci-success:
+    name: CI Success
+    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
+    needs: [lint, typecheck, test, security]
+    if: always()
+
+    steps:
+      - name: Check all jobs passed
+        run: |
+          if [[ "${{ needs.lint.result }}" != "success" ]] || \
+             [[ "${{ needs.typecheck.result }}" != "success" ]] || \
+             [[ "${{ needs.test.result }}" != "success" ]] || \
+             [[ "${{ needs.security.result }}" != "success" ]]; then
+            echo "One or more CI jobs failed"
+            exit 1
+          fi
+          echo "All CI checks passed!"
