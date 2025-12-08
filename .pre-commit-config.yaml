@@ -35,7 +35,7 @@ repos:
         additional_dependencies:
           - pydantic>=2.0.0
         args: [--ignore-missing-imports]
-        files: ^src/
+        files: ^app/
 
   # Security checks
   - repo: https://github.com/PyCQA/bandit
@@ -44,7 +44,7 @@ repos:
       - id: bandit
         args: [-c, pyproject.toml]
         additional_dependencies: ["bandit[toml]"]
-        files: ^src/
+        files: ^app/
 
   # Check for common security issues in dependencies
   - repo: https://github.com/Lucas-C/pre-commit-hooks-safety

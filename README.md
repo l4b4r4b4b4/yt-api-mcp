@@ -139,6 +139,17 @@ fastmcp-template/
 
 ## Development
 
+### Setup
+
+```bash
+# Install dependencies
+uv sync
+
+# Install pre-commit hooks
+uv run pre-commit install
+uv run pre-commit install --hook-type pre-push
+```
+
 ### Running Tests
 
 ```bash
