@@ -1,0 +1,50 @@
+# Docker Compose for FastMCP Template
+#
+# Usage:
+#   docker compose up                    # Run production server
+#   docker compose --profile dev up      # Run development server with hot reload
+#   docker compose build                 # Build all images
+#
+# Environment variables (optional):
+#   LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY, LANGFUSE_HOST
+
+services:
+  # Production server
+  fastmcp-template:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      target: production
+    image: ghcr.io/l4b4r4b4b4/fastmcp-template:latest
+    ports:
+      - "8000:8000"
+    environment:
+      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY:-}
+      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY:-}
+      - LANGFUSE_HOST=${LANGFUSE_HOST:-https://cloud.langfuse.com}
+    restart: unless-stopped
+
+  # Development server with hot reload
+  dev:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.dev
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./app:/app/app:ro
+    environment:
+      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY:-}
+      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY:-}
+      - LANGFUSE_HOST=${LANGFUSE_HOST:-https://cloud.langfuse.com}
+    profiles:
+      - dev
+
+  # Build the base image (for publishing)
+  base:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.base
+    image: ghcr.io/l4b4r4b4b4/fastmcp-base:latest
+    profiles:
+      - build
