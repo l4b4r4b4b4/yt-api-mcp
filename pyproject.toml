@@ -30,7 +30,7 @@ packages = ["app"]
 compile-bytecode = true
 
 [tool.uv.sources]
-mcp-refcache = { git = "https://github.com/l4b4r4b4b4/mcp-refcache.git" }
+mcp-refcache = { git = "https://github.com/l4b4r4b4b4/mcp-refcache.git", tag = "v0.0.2" }
 
 [dependency-groups]
 dev = [

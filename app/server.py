@@ -362,7 +362,6 @@ async def get_cached_result(
             validated.ref_id,
             page=validated.page,
             page_size=validated.page_size,
-            max_size=validated.max_size,
             actor="agent",
         )
 

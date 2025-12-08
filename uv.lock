@@ -504,7 +504,7 @@ dev = [
 requires-dist = [
     { name = "fastmcp", specifier = ">=2.13.3" },
     { name = "langfuse", marker = "extra == 'langfuse'", specifier = ">=2.0.0" },
-    { name = "mcp-refcache", git = "https://github.com/l4b4r4b4b4/mcp-refcache.git" },
+    { name = "mcp-refcache", git = "https://github.com/l4b4r4b4b4/mcp-refcache.git?tag=v0.0.2" },
     { name = "pydantic", specifier = ">=2.12.5" },
 ]
 provides-extras = ["langfuse"]
@@ -848,7 +848,7 @@ wheels = [
 [[package]]
 name = "mcp-refcache"
 version = "0.0.1"
-source = { git = "https://github.com/l4b4r4b4b4/mcp-refcache.git#94732f71dbb5757dd535a55395aab2496ddf6500" }
+source = { git = "https://github.com/l4b4r4b4b4/mcp-refcache.git?tag=v0.0.2#2dc1c00049dea308a92604229f1852a6107c8928" }
 dependencies = [
     { name = "pydantic" },
 ]

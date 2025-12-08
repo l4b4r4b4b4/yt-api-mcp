@@ -79,9 +79,9 @@ Build a **Zed Management MCP Server** for tracking/managing chat sessions per pr
 - [x] Run `uv run ruff check . --fix && uv run ruff format .` - passes
 - [x] Test server: `uv run fastmcp-template --help` - works
 
-### 🔄 In Progress
+### ✅ Completed This Session
 
-#### Structure Changes (Current Session)
+#### Structure Changes
 - [x] Moved `src/fastmcp_template/` → `app/` (flat structure for containerized servers)
 - [x] Updated pyproject.toml, tests, CI workflows for `app/` structure
 - [x] Created Docker setup:
@@ -89,16 +89,48 @@ Build a **Zed Management MCP Server** for tracking/managing chat sessions per pr
   - `docker/Dockerfile` - Production image extending base
   - `docker/Dockerfile.dev` - Development image with hot reload
   - `docker-compose.yml` - Local development and production
-  - `.github/workflows/docker.yml` - Build & publish to GHCR
+  - `.github/workflows/docker.yml` - Build & publish to GHCR (needs GH_PAT secret)
+- [x] All three Docker images build locally (base, app, dev)
+- [x] Fixed pre-commit config paths from src/ to app/
+- [x] Added pre-commit install instructions to README
+- [x] Pushed to GitHub repo `l4b4r4b4b4/fastmcp-template`
 
 #### Final Verification
 - [x] Run `nix develop` to test flake
 - [x] Tests pass (10/10)
 - [x] Linting passes
 - [x] CLI works (`uv run fastmcp-template --help`)
-- [ ] Verify Zed IDE settings work (LSP, MCP context servers)
-- [ ] Build Docker images locally
-- [ ] Push to GitHub repo `l4b4r4b4b4/fastmcp-template`
+- [x] Zed IDE works (LSP, session running)
+- [x] Docker images build locally
+- [x] Pre-commit hook works
+- [x] Pre-push hook works (but blocks on coverage)
+
+### 🔄 In Progress
+
+#### Test Coverage (BLOCKING PRE-PUSH)
+Current coverage: **51%** (required: **80%**)
+
+```
+Name                    Stmts   Miss Branch BrPart  Cover
+---------------------------------------------------------
+app/__init__.py             1      0      0      0   100%
+app/server.py              90     42      8      1    50%
+app/tools/__init__.py       0      0      0      0   100%
+---------------------------------------------------------
+TOTAL                      91     42      8      1    51%
+```
+
+**Functions needing tests in `app/server.py`:**
+- [ ] `generate_items` - async cached tool
+- [ ] `store_secret` - stores secret with EXECUTE permission
+- [ ] `compute_with_secret` - private computation
+- [ ] `get_cached_result` - pagination and cache retrieval
+- [ ] `is_admin` - admin check function
+- [ ] `main` - CLI entry point (may skip or mock)
+
+#### Remaining After Tests
+- [ ] Push to GitHub (blocked by coverage)
+- [ ] Add `GH_PAT` secret to repo settings for Docker CI
 - [ ] Return to mcp-refcache, delete examples/fastmcp-template, add as submodule
 
 ---
@@ -223,7 +255,16 @@ fastmcp-template/
 ## Next Steps
 
 1. ~~Verify `nix develop` works correctly~~ ✅
-2. Verify Zed LSP and MCP context servers work
-3. Build Docker images locally to test
-4. Push to GitHub
-5. Add as submodule to mcp-refcache
+2. ~~Verify Zed LSP and MCP context servers work~~ ✅
+3. ~~Build Docker images locally~~ ✅
+4. ~~Push to GitHub~~ ✅ (initial push done)
+5. **Add tests to reach 80% coverage** ← CURRENT BLOCKER
+6. Push coverage fix (currently blocked by pre-push hook)
+7. Add `GH_PAT` secret to repo settings
+8. Add as submodule to mcp-refcache
+
+---
+
+## Handoff: Test Coverage Task
+
+See codebox below for next session prompt.
