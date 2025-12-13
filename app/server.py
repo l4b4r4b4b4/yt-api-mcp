@@ -1,80 +1,47 @@
-#!/usr/bin/env python3
-"""FastMCP Template Server with RefCache Integration.
+"""FastMCP Template Server with RefCache and Langfuse Tracing.
 
-This template demonstrates how to use mcp-refcache with FastMCP to build
-an MCP server that handles large results efficiently.
+This module creates and configures the FastMCP server, wiring together
+tools from the modular tools package.
 
-Features demonstrated:
+Features:
 - Reference-based caching for large results
 - Preview generation (sample, truncate, paginate strategies)
 - Pagination for accessing large datasets
 - Access control (user vs agent permissions)
 - Private computation (EXECUTE without READ)
-- Both sync and async tool implementations
-- Optional Langfuse tracing integration
+- Langfuse tracing integration for observability
 
 Usage:
-    # Install dependencies
-    uv sync
+    # Run with typer CLI
+    uvx fastmcp-template stdio           # Local CLI mode
+    uvx fastmcp-template streamable-http # Remote/Docker mode
 
-    # Run with stdio (for Claude Desktop / Zed)
-    uv run fastmcp-template
-
-    # Run with SSE (for web clients / debugging)
-    uv run fastmcp-template --transport sse --port 8000
-
-Claude Desktop Configuration:
-    Add to your claude_desktop_config.json:
-    {
-        "mcpServers": {
-            "fastmcp-template": {
-                "command": "uv",
-                "args": ["run", "fastmcp-template"]
-            }
-        }
-    }
+    # Or with uv
+    uv run fastmcp-template stdio
 """
 
 from __future__ import annotations
 
-import argparse
-import sys
 from typing import Any
 
-from pydantic import BaseModel, Field
+from fastmcp import FastMCP
+from mcp_refcache import PreviewConfig, PreviewStrategy, RefCache
+from mcp_refcache.fastmcp import cache_instructions, register_admin_tools
 
-# =============================================================================
-# Check for FastMCP availability
-# =============================================================================
-
-try:
-    from fastmcp import FastMCP
-except ImportError:
-    print(
-        "Error: FastMCP is not installed. Install with:\n  uv sync\n",
-        file=sys.stderr,
-    )
-    sys.exit(1)
-
-# =============================================================================
-# Import mcp-refcache components
-# =============================================================================
-
-from mcp_refcache import (
-    AccessPolicy,
-    CacheResponse,
-    DefaultActor,
-    Permission,
-    PreviewConfig,
-    PreviewStrategy,
-    RefCache,
+from app.prompts import langfuse_guide, template_guide
+from app.tools import (
+    create_compute_with_secret,
+    create_get_cached_result,
+    create_health_check,
+    create_store_secret,
+    enable_test_context,
+    generate_items,
+    get_trace_info,
+    hello,
+    reset_test_context,
+    set_test_context,
 )
-from mcp_refcache.fastmcp import (
-    cache_guide_prompt,
-    cache_instructions,
-    register_admin_tools,
-    with_cache_docs,
-)
+from app.tracing import TracedRefCache
 
 # =============================================================================
 # Initialize FastMCP Server
@@ -82,7 +49,14 @@ from mcp_refcache.fastmcp import (
 
 mcp = FastMCP(
     name="FastMCP Template",
-    instructions=f"""A template MCP server with reference-based caching.
+    instructions=f"""A template MCP server with reference-based caching and Langfuse tracing.
+
+All tool calls are traced to Langfuse with:
+- User ID and Session ID from context (for filtering/aggregation)
+- Full context metadata (org_id, agent_id, cache_namespace)
+- Cache operation spans with hit/miss tracking
+
+Enable test mode with enable_test_context() to simulate different users.
 
 Available tools:
 - hello: Simple greeting tool (no caching)
@@ -90,18 +64,21 @@ Available tools:
 - store_secret: Store a secret value for private computation
 - compute_with_secret: Use a secret in computation without revealing it
 - get_cached_result: Retrieve or paginate through cached results
+- enable_test_context: Enable/disable test context for Langfuse demos
+- set_test_context: Set test context values for user attribution
+- reset_test_context: Reset test context to defaults
+- get_trace_info: Get current Langfuse tracing status
 
 {cache_instructions()}
 """,
 )
 
 # =============================================================================
-# Initialize RefCache
+# Initialize RefCache with Langfuse Tracing
 # =============================================================================
 
-# Create a RefCache instance with sensible defaults
-# Uses token-based sizing (default) for accurate LLM context management
-cache = RefCache(
+# Create the base RefCache instance
+_cache = RefCache(
     name="fastmcp-template",
     default_ttl=3600,  # 1 hour TTL
     preview_config=PreviewConfig(
@@ -110,108 +87,39 @@ cache = RefCache(
     ),
 )
 
-# =============================================================================
-# Pydantic Models for Tool Inputs
-# =============================================================================
-
-
-class ItemGenerationInput(BaseModel):
-    """Input model for item generation."""
-
-    count: int = Field(
-        default=10,
-        ge=1,
-        le=10000,
-        description="Number of items to generate",
-    )
-    prefix: str = Field(
-        default="item",
-        description="Prefix for item names",
-    )
-
-
-class SecretInput(BaseModel):
-    """Input model for storing secret values."""
-
-    name: str = Field(
-        description="Name for the secret (used as key)",
-        min_length=1,
-        max_length=100,
-    )
-    value: float = Field(
-        description="The secret numeric value",
-    )
-
-
-class SecretComputeInput(BaseModel):
-    """Input model for computing with secrets."""
-
-    secret_ref: str = Field(
-        description="Reference ID of the secret value",
-    )
-    multiplier: float = Field(
-        default=1.0,
-        description="Multiplier to apply to the secret value",
-    )
-
-
-class CacheQueryInput(BaseModel):
-    """Input model for cache queries."""
-
-    ref_id: str = Field(
-        description="Reference ID to look up",
-    )
-    page: int | None = Field(
-        default=None,
-        ge=1,
-        description="Page number for pagination (1-indexed)",
-    )
-    page_size: int | None = Field(
-        default=None,
-        ge=1,
-        le=100,
-        description="Number of items per page",
-    )
-    max_size: int | None = Field(
-        default=None,
-        ge=1,
-        description="Maximum preview size (tokens/chars). Overrides defaults.",
-    )
-
+# Wrap with TracedRefCache for Langfuse observability
+cache = TracedRefCache(_cache)
 
 # =============================================================================
-# Tool Implementations
+# Create Bound Tool Functions
 # =============================================================================
 
+# These are created with factory functions and bound to the cache instance.
+# We keep references for testing and re-export them as module attributes.
+store_secret = create_store_secret(cache)
+compute_with_secret = create_compute_with_secret(cache)
+get_cached_result = create_get_cached_result(cache)
+health_check = create_health_check(_cache)
 
-@mcp.tool
-def hello(name: str = "World") -> dict[str, Any]:
-    """Say hello to someone.
+# =============================================================================
+# Register Tools
+# =============================================================================
 
-    A simple example tool that doesn't use caching.
-
-    Args:
-        name: The name to greet.
-
-    Returns:
-        A greeting message.
-    """
-    return {
-        "message": f"Hello, {name}!",
-        "server": "fastmcp-template",
-    }
+# Demo tools
+mcp.tool(hello)
 
 
 @mcp.tool
 @cache.cached(namespace="public")
-async def generate_items(
+async def _generate_items(
     count: int = 10,
     prefix: str = "item",
-) -> list[dict[str, Any]]:
+) -> dict[str, Any]:
     """Generate a list of items.
 
     Demonstrates caching of large results in the PUBLIC namespace.
     For large counts, returns a reference with a preview instead of the full data.
+    All operations are traced to Langfuse with user/session attribution.
 
     Use get_cached_result to paginate through large results.
 
@@ -225,189 +133,25 @@ async def generate_items(
     **Caching:** Large results are cached in the public namespace.
 
     **Pagination:** Use `page` and `page_size` to navigate results.
+
+    **Preview Size:** server default. Override per-call with
+        `get_cached_result(ref_id, max_size=...)`
     """
-    validated = ItemGenerationInput(count=count, prefix=prefix)
-
-    items = [
-        {
-            "id": i,
-            "name": f"{validated.prefix}_{i}",
-            "value": i * 10,
-        }
-        for i in range(validated.count)
-    ]
-
-    # Return raw data - decorator handles caching and structured response
-    return items
+    items = await generate_items(count=count, prefix=prefix)
+    return items  # type: ignore[return-value]  # decorator transforms to dict
 
 
-@mcp.tool
-def store_secret(name: str, value: float) -> dict[str, Any]:
-    """Store a secret value that agents cannot read, only use in computations.
+# Context management tools
+mcp.tool(enable_test_context)
+mcp.tool(set_test_context)
+mcp.tool(reset_test_context)
+mcp.tool(get_trace_info)
 
-    This demonstrates the EXECUTE permission - agents can use the value
-    in compute_with_secret without ever seeing what it is.
-
-    Args:
-        name: Name for the secret.
-        value: The secret numeric value.
-
-    Returns:
-        Reference ID and confirmation message.
-    """
-    validated = SecretInput(name=name, value=value)
-
-    # Create a policy where agents can EXECUTE but not READ
-    secret_policy = AccessPolicy(
-        user_permissions=Permission.FULL,  # Users can see everything
-        agent_permissions=Permission.EXECUTE,  # Agents can only use in computation
-    )
-
-    ref = cache.set(
-        key=f"secret_{validated.name}",
-        value=validated.value,
-        namespace="user:secrets",
-        policy=secret_policy,
-        tool_name="store_secret",
-    )
-
-    return {
-        "ref_id": ref.ref_id,
-        "name": validated.name,
-        "message": f"Secret '{validated.name}' stored. Use compute_with_secret to use it.",
-        "permissions": {
-            "user": "FULL (can read, write, execute)",
-            "agent": "EXECUTE only (can use in computation, cannot read)",
-        },
-    }
-
-
-@mcp.tool
-@with_cache_docs(accepts_references=True, private_computation=True)
-def compute_with_secret(secret_ref: str, multiplier: float = 1.0) -> dict[str, Any]:
-    """Compute using a secret value without revealing it.
-
-    The secret is multiplied by the provided multiplier.
-    This demonstrates private computation - the agent orchestrates
-    the computation but never sees the actual secret value.
-
-    Args:
-        secret_ref: Reference ID of the secret value.
-        multiplier: Value to multiply the secret by.
-
-    Returns:
-        The computation result (without revealing the secret).
-
-    **References:** This tool accepts `ref_id` from previous tool calls.
-
-    **Private Compute:** Values are processed server-side without exposure.
-    """
-    validated = SecretComputeInput(secret_ref=secret_ref, multiplier=multiplier)
-
-    # Create a system actor to resolve the secret (bypasses agent restrictions)
-    system_actor = DefaultActor.system()
-
-    try:
-        # Resolve the secret value as system (has full access)
-        secret_value = cache.resolve(validated.secret_ref, actor=system_actor)
-    except KeyError as e:
-        raise ValueError(f"Secret reference '{validated.secret_ref}' not found") from e
-
-    result = secret_value * validated.multiplier
-
-    return {
-        "result": result,
-        "multiplier": validated.multiplier,
-        "secret_ref": validated.secret_ref,
-        "message": "Computed using secret value (value not revealed)",
-    }
-
-
-@mcp.tool
-@with_cache_docs(accepts_references=True, supports_pagination=True)
-async def get_cached_result(
-    ref_id: str,
-    page: int | None = None,
-    page_size: int | None = None,
-    max_size: int | None = None,
-) -> dict[str, Any]:
-    """Retrieve a cached result, optionally with pagination.
-
-    Use this to:
-    - Get a preview of a cached value
-    - Paginate through large lists
-    - Access the full value of a cached result
-
-    Args:
-        ref_id: Reference ID to look up.
-        page: Page number (1-indexed).
-        page_size: Items per page.
-        max_size: Maximum preview size (overrides defaults).
-
-    Returns:
-        The cached value or a preview with pagination info.
-
-    **Caching:** Large results are returned as references with previews.
-
-    **Pagination:** Use `page` and `page_size` to navigate results.
-
-    **References:** This tool accepts `ref_id` from previous tool calls.
-    """
-    validated = CacheQueryInput(
-        ref_id=ref_id, page=page, page_size=page_size, max_size=max_size
-    )
-
-    try:
-        response: CacheResponse = cache.get(
-            validated.ref_id,
-            page=validated.page,
-            page_size=validated.page_size,
-            actor="agent",
-        )
-
-        result: dict[str, Any] = {
-            "ref_id": validated.ref_id,
-            "preview": response.preview,
-            "preview_strategy": response.preview_strategy.value,
-            "total_items": response.total_items,
-        }
-
-        if response.page is not None:
-            result["page"] = response.page
-            result["total_pages"] = response.total_pages
-
-        if response.original_size:
-            result["original_size"] = response.original_size
-            result["preview_size"] = response.preview_size
-
-        return result
-
-    except (PermissionError, KeyError):
-        return {
-            "error": "Invalid or inaccessible reference",
-            "message": "Reference not found, expired, or access denied",
-            "ref_id": validated.ref_id,
-        }
-
-
-# =============================================================================
-# Health Check
-# =============================================================================
-
-
-@mcp.tool
-def health_check() -> dict[str, Any]:
-    """Check server health status.
-
-    Returns:
-        Health status information.
-    """
-    return {
-        "status": "healthy",
-        "server": "fastmcp-template",
-        "cache": cache.name,
-    }
-
+# Cache-bound tools (using pre-created module-level functions)
+mcp.tool(store_secret)
+mcp.tool(compute_with_secret)
+mcp.tool(get_cached_result)
+mcp.tool(health_check)
 
 # =============================================================================
 # Admin Tools (Permission-Gated)
@@ -423,101 +167,27 @@ async def is_admin(ctx: Any) -> bool:
     return False
 
 
-# Register admin tools with the cache
+# Register admin tools with the underlying cache (not the traced wrapper)
 _admin_tools = register_admin_tools(
     mcp,
-    cache,
+    _cache,
     admin_check=is_admin,
     prefix="admin_",
     include_dangerous=False,
 )
 
-
 # =============================================================================
-# Prompts for Guidance
+# Register Prompts
 # =============================================================================
 
 
 @mcp.prompt
-def template_guide() -> str:
+def _template_guide() -> str:
     """Guide for using this MCP server template."""
-    return f"""# FastMCP Template Guide
-
-## Quick Start
-
-1. **Simple Tool**
-   Use `hello` for a basic greeting:
-   - `hello("World")` → "Hello, World!"
-
-2. **Generate Items (Caching Demo)**
-   Use `generate_items` to create a list:
-   - `generate_items(count=100, prefix="widget")`
-   - Returns ref_id + preview for large results
-   - Cached in the PUBLIC namespace (shared)
-
-3. **Paginate Results**
-   Use `get_cached_result` to navigate large results:
-   - `get_cached_result(ref_id, page=2, page_size=20)`
-
-## Private Computation
-
-Store values that agents can use but not see:
-
-```
-# Store a secret
-store_secret("api_key_hash", 12345.0)
-# Returns ref_id for the secret
-
-# Use in computation (agent never sees the value)
-compute_with_secret(ref_id, multiplier=2.0)
-# Returns the result
-```
-
----
-
-{cache_guide_prompt()}
-"""
+    return template_guide()
 
 
-# =============================================================================
-# Main Entry Point
-# =============================================================================
-
-
-def main() -> None:
-    """Run the MCP server."""
-    parser = argparse.ArgumentParser(
-        description="FastMCP Template Server with RefCache",
-    )
-    parser.add_argument(
-        "--transport",
-        choices=["stdio", "sse"],
-        default="stdio",
-        help="Transport mode (default: stdio for Claude Desktop)",
-    )
-    parser.add_argument(
-        "--port",
-        type=int,
-        default=8000,
-        help="Port for SSE transport (default: 8000)",
-    )
-    parser.add_argument(
-        "--host",
-        default="127.0.0.1",
-        help="Host for SSE transport (default: 127.0.0.1)",
-    )
-
-    args = parser.parse_args()
-
-    if args.transport == "stdio":
-        mcp.run(transport="stdio")
-    else:
-        mcp.run(
-            transport="sse",
-            host=args.host,
-            port=args.port,
-        )
-
-
-if __name__ == "__main__":
-    main()
+@mcp.prompt
+def _langfuse_guide() -> str:
+    """Guide for using Langfuse tracing with this server."""
+    return langfuse_guide()

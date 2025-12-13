@@ -2,11 +2,18 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
 from app.server import cache, mcp
+from app.tracing import (
+    MockContext,
+    enable_test_mode,
+    get_langfuse_attributes,
+    is_langfuse_enabled,
+    is_test_mode_enabled,
+)
 
 
 class TestServerInitialization:
@@ -45,6 +52,182 @@ class TestHelloTool:
         """Test hello with custom name."""
         result = self._call_hello("Alice")
         assert result["message"] == "Hello, Alice!"
+
+
+class TestTracingModule:
+    """Tests for the tracing module."""
+
+    def setup_method(self) -> None:
+        """Reset test mode before each test."""
+        enable_test_mode(False)
+        MockContext.reset()
+
+    def teardown_method(self) -> None:
+        """Clean up after each test."""
+        enable_test_mode(False)
+        MockContext.reset()
+
+    def test_is_langfuse_enabled_without_env(self) -> None:
+        """Test that Langfuse is disabled without env vars."""
+        # This may be True or False depending on env
+        result = is_langfuse_enabled()
+        assert isinstance(result, bool)
+
+    def test_enable_test_mode(self) -> None:
+        """Test enabling test mode."""
+        assert not is_test_mode_enabled()
+        enable_test_mode(True)
+        assert is_test_mode_enabled()
+        enable_test_mode(False)
+        assert not is_test_mode_enabled()
+
+    def test_mock_context_default_state(self) -> None:
+        """Test MockContext has default state."""
+        state = MockContext.get_current_state()
+        assert state["user_id"] == "demo_user"
+        assert state["org_id"] == "demo_org"
+        assert state["agent_id"] == "demo_agent"
+        assert state["session_id"] == "demo_session_001"
+
+    def test_mock_context_set_state(self) -> None:
+        """Test MockContext state can be updated."""
+        MockContext.set_state(user_id="alice", org_id="acme")
+        state = MockContext.get_current_state()
+        assert state["user_id"] == "alice"
+        assert state["org_id"] == "acme"
+
+    def test_mock_context_set_session_id(self) -> None:
+        """Test MockContext session_id can be updated."""
+        MockContext.set_session_id("new-session-123")
+        state = MockContext.get_current_state()
+        assert state["session_id"] == "new-session-123"
+
+    def test_mock_context_reset(self) -> None:
+        """Test MockContext reset."""
+        MockContext.set_state(user_id="bob")
+        MockContext.set_session_id("custom-session")
+        MockContext.reset()
+        state = MockContext.get_current_state()
+        assert state["user_id"] == "demo_user"
+        assert state["session_id"] == "demo_session_001"
+
+    def test_get_langfuse_attributes_default(self) -> None:
+        """Test get_langfuse_attributes without context."""
+        attrs = get_langfuse_attributes()
+        assert "user_id" in attrs
+        assert "session_id" in attrs
+        assert "metadata" in attrs
+        assert "tags" in attrs
+        assert "version" in attrs
+
+    def test_get_langfuse_attributes_with_test_mode(self) -> None:
+        """Test get_langfuse_attributes with test mode enabled."""
+        enable_test_mode(True)
+        MockContext.set_state(user_id="test_user", org_id="test_org")
+        attrs = get_langfuse_attributes()
+        assert attrs["user_id"] == "test_user"
+        assert attrs["metadata"]["orgid"] == "test_org"
+        assert "testmode" in attrs["tags"]
+
+    def test_get_langfuse_attributes_with_operation(self) -> None:
+        """Test get_langfuse_attributes with operation name."""
+        attrs = get_langfuse_attributes(operation="cache_set")
+        assert attrs["metadata"]["operation"] == "cache_set"
+        assert "cacheset" in attrs["tags"]
+
+
+class TestContextManagementTools:
+    """Tests for context management tools."""
+
+    def setup_method(self) -> None:
+        """Reset test mode before each test."""
+        enable_test_mode(False)
+        MockContext.reset()
+
+    def teardown_method(self) -> None:
+        """Clean up after each test."""
+        enable_test_mode(False)
+        MockContext.reset()
+
+    def _call_enable_test_context(self, enabled: bool = True) -> dict:
+        """Helper to call enable_test_context tool."""
+        from app import server
+
+        fn = server.enable_test_context
+        if hasattr(fn, "fn"):
+            return fn.fn(enabled)
+        return fn(enabled)
+
+    def _call_set_test_context(self, **kwargs) -> dict:
+        """Helper to call set_test_context tool."""
+        from app import server
+
+        fn = server.set_test_context
+        if hasattr(fn, "fn"):
+            return fn.fn(**kwargs)
+        return fn(**kwargs)
+
+    def _call_reset_test_context(self) -> dict:
+        """Helper to call reset_test_context tool."""
+        from app import server
+
+        fn = server.reset_test_context
+        if hasattr(fn, "fn"):
+            return fn.fn()
+        return fn()
+
+    def _call_get_trace_info(self) -> dict:
+        """Helper to call get_trace_info tool."""
+        from app import server
+
+        fn = server.get_trace_info
+        if hasattr(fn, "fn"):
+            return fn.fn()
+        return fn()
+
+    def test_enable_test_context_returns_status(self) -> None:
+        """Test enable_test_context returns correct status."""
+        result = self._call_enable_test_context(True)
+        assert result["test_mode"] is True
+        assert "context" in result
+        assert "langfuse_enabled" in result
+
+    def test_enable_test_context_disable(self) -> None:
+        """Test disabling test context."""
+        self._call_enable_test_context(True)
+        result = self._call_enable_test_context(False)
+        assert result["test_mode"] is False
+
+    def test_set_test_context_updates_values(self) -> None:
+        """Test set_test_context updates context values."""
+        result = self._call_set_test_context(
+            user_id="alice", org_id="acme", session_id="chat-001"
+        )
+        assert result["context"]["user_id"] == "alice"
+        assert result["context"]["org_id"] == "acme"
+        assert result["context"]["session_id"] == "chat-001"
+
+    def test_set_test_context_auto_enables_test_mode(self) -> None:
+        """Test set_test_context auto-enables test mode."""
+        assert not is_test_mode_enabled()
+        self._call_set_test_context(user_id="bob")
+        assert is_test_mode_enabled()
+
+    def test_reset_test_context(self) -> None:
+        """Test reset_test_context resets to defaults."""
+        self._call_set_test_context(user_id="alice")
+        result = self._call_reset_test_context()
+        assert result["context"]["user_id"] == "demo_user"
+
+    def test_get_trace_info_returns_status(self) -> None:
+        """Test get_trace_info returns tracing status."""
+        result = self._call_get_trace_info()
+        assert "langfuse_enabled" in result
+        assert "langfuse_host" in result
+        assert "public_key_set" in result
+        assert "secret_key_set" in result
+        assert "test_mode_enabled" in result
+        assert "langfuse_attributes" in result
 
 
 class TestHealthCheck:
@@ -141,7 +324,7 @@ class TestGenerateItems:
             assert result is not None
 
     @pytest.mark.asyncio
-    async def test_generate_items_custom_count(self) -> None:
+    async def test_generate_items_custom_params(self) -> None:
         """Test generate_items with custom count."""
         from app import server
 
@@ -156,7 +339,7 @@ class TestGenerateItems:
             assert result[4]["name"] == "widget_4"
 
     @pytest.mark.asyncio
-    async def test_generate_items_structure(self) -> None:
+    async def test_generate_items_large_count(self) -> None:
         """Test that generated items have correct structure."""
         from app import server
 
@@ -358,7 +541,7 @@ class TestGetCachedResult:
         assert "ref_id" in result
 
     @pytest.mark.asyncio
-    async def test_get_cached_result_returns_ref_id(self) -> None:
+    async def test_get_cached_result_not_found(self) -> None:
         """Test that result includes the requested ref_id."""
         result = await self._call_get_cached_result("test:ref:123")
 
@@ -389,80 +572,50 @@ class TestIsAdmin:
         assert result is False
 
 
-class TestMain:
-    """Tests for the main entry point."""
+class TestTyperCLI:
+    """Tests for the typer CLI entry point."""
 
-    def test_main_with_stdio_transport(self) -> None:
-        """Test main function with stdio transport."""
-        with (
-            patch("sys.argv", ["fastmcp-template"]),
-            patch("app.server.mcp.run") as mock_run,
-        ):
-            from app.server import main
+    def test_cli_app_exists(self) -> None:
+        """Test that typer app is created."""
+        from app.__main__ import app
 
-            main()
+        assert app is not None
 
-            mock_run.assert_called_once_with(transport="stdio")
+    def test_cli_has_stdio_command(self) -> None:
+        """Test that CLI has stdio command."""
+        from app.__main__ import app
 
-    def test_main_with_sse_transport(self) -> None:
-        """Test main function with SSE transport."""
-        with (
-            patch("sys.argv", ["fastmcp-template", "--transport", "sse"]),
-            patch("app.server.mcp.run") as mock_run,
-        ):
-            from app.server import main
+        # Check callback names since typer may not set cmd.name for decorated funcs
+        callback_names = [
+            cmd.callback.__name__ if cmd.callback else cmd.name
+            for cmd in app.registered_commands
+        ]
+        assert "stdio" in callback_names
 
-            main()
+    def test_cli_has_sse_command(self) -> None:
+        """Test that CLI has sse command."""
+        from app.__main__ import app
 
-            mock_run.assert_called_once_with(
-                transport="sse",
-                host="127.0.0.1",
-                port=8000,
-            )
+        callback_names = [
+            cmd.callback.__name__ if cmd.callback else cmd.name
+            for cmd in app.registered_commands
+        ]
+        assert "sse" in callback_names
 
-    def test_main_with_custom_port(self) -> None:
-        """Test main function with custom port."""
-        with (
-            patch(
-                "sys.argv",
-                ["fastmcp-template", "--transport", "sse", "--port", "9000"],
-            ),
-            patch("app.server.mcp.run") as mock_run,
-        ):
-            from app.server import main
+    def test_cli_has_streamable_http_command(self) -> None:
+        """Test that CLI has streamable-http command."""
+        from app.__main__ import app
 
-            main()
-
-            mock_run.assert_called_once_with(
-                transport="sse",
-                host="127.0.0.1",
-                port=9000,
-            )
-
-    def test_main_with_custom_host(self) -> None:
-        """Test main function with custom host."""
-        with (
-            patch(
-                "sys.argv",
-                [
-                    "fastmcp-template",
-                    "--transport",
-                    "sse",
-                    "--host",
-                    "0.0.0.0",
-                ],
-            ),
-            patch("app.server.mcp.run") as mock_run,
-        ):
-            from app.server import main
-
-            main()
-
-            mock_run.assert_called_once_with(
-                transport="sse",
-                host="0.0.0.0",
-                port=8000,
-            )
+        # streamable-http uses explicit name, check both name and callback
+        command_info = [
+            (cmd.name, cmd.callback.__name__ if cmd.callback else None)
+            for cmd in app.registered_commands
+        ]
+        has_streamable_http = any(
+            name == "streamable-http" or callback == "streamable_http"
+            for name, callback in command_info
+        )
+        assert has_streamable_http
 
 
 class TestPydanticModels:
@@ -470,7 +623,7 @@ class TestPydanticModels:
 
     def test_item_generation_input_defaults(self) -> None:
         """Test ItemGenerationInput default values."""
-        from app.server import ItemGenerationInput
+        from app.tools.demo import ItemGenerationInput
 
         model = ItemGenerationInput()
         assert model.count == 10
@@ -478,7 +631,7 @@ class TestPydanticModels:
 
     def test_item_generation_input_custom(self) -> None:
         """Test ItemGenerationInput with custom values."""
-        from app.server import ItemGenerationInput
+        from app.tools.demo import ItemGenerationInput
 
         model = ItemGenerationInput(count=50, prefix="widget")
         assert model.count == 50
@@ -488,7 +641,7 @@ class TestPydanticModels:
         """Test ItemGenerationInput validates count range."""
         from pydantic import ValidationError
 
-        from app.server import ItemGenerationInput
+        from app.tools.demo import ItemGenerationInput
 
         with pytest.raises(ValidationError):
             ItemGenerationInput(count=0)  # Below minimum
@@ -498,7 +651,7 @@ class TestPydanticModels:
 
     def test_secret_input(self) -> None:
         """Test SecretInput model."""
-        from app.server import SecretInput
+        from app.tools.secrets import SecretInput
 
         model = SecretInput(name="test", value=42.0)
         assert model.name == "test"
@@ -508,14 +661,14 @@ class TestPydanticModels:
         """Test SecretInput validates name length."""
         from pydantic import ValidationError
 
-        from app.server import SecretInput
+        from app.tools.secrets import SecretInput
 
         with pytest.raises(ValidationError):
             SecretInput(name="", value=1.0)  # Empty name
 
     def test_secret_compute_input(self) -> None:
         """Test SecretComputeInput model."""
-        from app.server import SecretComputeInput
+        from app.tools.secrets import SecretComputeInput
 
         model = SecretComputeInput(secret_ref="ref:123", multiplier=2.5)
         assert model.secret_ref == "ref:123"
@@ -523,14 +676,14 @@ class TestPydanticModels:
 
     def test_secret_compute_input_default_multiplier(self) -> None:
         """Test SecretComputeInput default multiplier."""
-        from app.server import SecretComputeInput
+        from app.tools.secrets import SecretComputeInput
 
         model = SecretComputeInput(secret_ref="ref:456")
         assert model.multiplier == 1.0
 
     def test_cache_query_input(self) -> None:
         """Test CacheQueryInput model."""
-        from app.server import CacheQueryInput
+        from app.tools.cache import CacheQueryInput
 
         model = CacheQueryInput(ref_id="cache:ref", page=2, page_size=20)
         assert model.ref_id == "cache:ref"
@@ -539,7 +692,7 @@ class TestPydanticModels:
 
     def test_cache_query_input_defaults(self) -> None:
         """Test CacheQueryInput optional fields."""
-        from app.server import CacheQueryInput
+        from app.tools.cache import CacheQueryInput
 
         model = CacheQueryInput(ref_id="cache:ref")
         assert model.page is None

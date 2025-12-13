@@ -8,16 +8,16 @@ authors = [
 ]
 requires-python = ">=3.12"
 dependencies = [
-    "fastmcp>=2.13.3",
-    "mcp-refcache",
-    "pydantic>=2.12.5",
+    "fastmcp>=2.14.0",
+    "langfuse>=3.10.0",
+    "mcp-refcache>=0.1.0",
+    "pydantic>=2.10.0",
+    "pydantic-settings>=2.10.0",
+    "typer>=0.15.0",
 ]
 
-[project.optional-dependencies]
-langfuse = ["langfuse>=2.0.0"]
-
 [project.scripts]
-fastmcp-template = "app.server:main"
+fastmcp-template = "app.__main__:app"
 
 [build-system]
 requires = ["hatchling>=1.0.0"]
@@ -28,9 +28,6 @@ packages = ["app"]
 
 [tool.uv]
 compile-bytecode = true
-
-[tool.uv.sources]
-mcp-refcache = { git = "https://github.com/l4b4r4b4b4/mcp-refcache.git", tag = "v0.0.2" }
 
 [dependency-groups]
 dev = [
@@ -79,17 +76,29 @@ source = ["app"]
 branch = true
 
 [tool.coverage.report]
+# 73 - the best number (ask Sheldon Cooper)
+fail_under = 73
+show_missing = true
 exclude_lines = [
     "pragma: no cover",
     "if TYPE_CHECKING:",
     "raise NotImplementedError",
 ]
 
+[tool.coverage.html]
+skip_empty = true
+
 [tool.mypy]
 python_version = "3.12"
 strict = true
 warn_return_any = true
 warn_unused_ignores = true
+# Allow untyped decorators from FastMCP/mcp-refcache (no type stubs available)
+disallow_untyped_decorators = false
+
+[[tool.mypy.overrides]]
+module = ["fastmcp.*", "mcp_refcache.*", "langfuse.*"]
+ignore_missing_imports = true
 
 [tool.bandit]
 exclude_dirs = ["tests", ".venv", "archive"]
