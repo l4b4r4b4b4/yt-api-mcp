@@ -18,7 +18,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [0.0.0] - 2025-01-08
+## [0.0.1] - 2025-01-11
+
+### Fixed
+- **stdio mode protocol fix**: Startup info now writes to stderr instead of stdout, fixing MCP client handshake issues with Zed and Claude Desktop
+- Package now works correctly with `uvx yt-api-mcp stdio`
+
+### Added
+- **Aligned executable name**: Added `yt-api-mcp` as primary executable (matching package name)
+- `yt-mcp` remains as legacy alias for backwards compatibility
+
+### Changed
+- Package name is `yt-api-mcp` on PyPI (was `yt-mcp` but that conflicted with existing package)
+
+### Installation
+```bash
+# PyPI (recommended)
+pip install yt-api-mcp
+
+# Or with uvx
+uvx yt-api-mcp stdio
+
+# Legacy alias still works
+uvx --from yt-api-mcp yt-mcp stdio
+```
+
+---
+
+## [0.0.0] - 2025-01-11
 
 ### Overview
 Initial experimental release of the YouTube MCP server. This version tests both the core implementation and the release workflow. Version 0.0.0 signals "experimental test release - expect issues" which is honest for a first release.

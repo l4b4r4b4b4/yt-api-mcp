@@ -60,7 +60,7 @@
     },
     "yt-lib": {
       "command": "uvx",
-      "args": ["yt-mcp", "stdio"],
+      "args": ["yt-api-mcp", "stdio"],
       "env": {
         "LANGFUSE_PUBLIC_KEY": "",
         "LANGFUSE_SECRET_KEY": "",

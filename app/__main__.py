@@ -36,15 +36,23 @@ def _get_port() -> int:
     return int(os.environ.get("FASTMCP_PORT", "8000"))
 
 
-def _print_startup_info(transport: str) -> None:
-    """Print startup information."""
+def _print_startup_info(transport: str, to_stderr: bool = False) -> None:
+    """Print startup information.
+
+    Args:
+        transport: The transport mode being used.
+        to_stderr: If True, print to stderr (required for stdio mode).
+    """
     from .tracing import is_langfuse_enabled
 
-    typer.echo(f"Transport: {transport}")
+    typer.echo(f"Transport: {transport}", err=to_stderr)
     typer.echo(
-        f"Langfuse tracing: {'enabled' if is_langfuse_enabled() else 'disabled'}"
+        f"Langfuse tracing: {'enabled' if is_langfuse_enabled() else 'disabled'}",
+        err=to_stderr,
     )
-    typer.echo("Context propagation: enabled (user_id, session_id, metadata)")
+    typer.echo(
+        "Context propagation: enabled (user_id, session_id, metadata)", err=to_stderr
+    )
 
 
 def _handle_shutdown() -> None:
@@ -67,7 +75,8 @@ def stdio() -> None:
     """
     from .server import mcp
 
-    _print_startup_info("stdio")
+    # For stdio mode, all output must go to stderr to avoid breaking MCP protocol
+    _print_startup_info("stdio", to_stderr=True)
 
     try:
         mcp.run(transport="stdio")
