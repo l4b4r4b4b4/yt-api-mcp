@@ -5,17 +5,17 @@
 #
 # Prerequisites:
 # 1. Configure trusted publisher on PyPI:
-#    - Go to https://pypi.org/manage/project/fastmcp-template/settings/publishing/
+#    - Go to https://pypi.org/manage/project/yt-api-mcp/settings/publishing/
 #    - Add GitHub as trusted publisher with:
 #      - Owner: l4b4r4b4b4
-#      - Repository: fastmcp-template
+#      - Repository: mcp-refcache (this is a monorepo, yt-mcp is in examples/)
 #      - Workflow: publish.yml
 #      - Environment: pypi (optional but recommended)
 #
 # Usage:
-#   uvx fastmcp-template stdio          # Local CLI mode
-#   uvx fastmcp-template sse            # SSE server mode
-#   uvx fastmcp-template streamable-http # Recommended for remote
+#   uvx yt-api-mcp stdio          # Local CLI mode
+#   uvx yt-api-mcp sse            # SSE server mode
+#   uvx yt-api-mcp streamable-http # Recommended for remote
 
 name: Publish to PyPI
 
@@ -72,10 +72,10 @@ jobs:
 
     environment:
       name: pypi
-      url: https://pypi.org/project/fastmcp-template
+      url: https://pypi.org/project/yt-api-mcp
 
     permissions:
-      id-token: write  # Required for trusted publishing
+      id-token: write # Required for trusted publishing
 
     steps:
       - name: Download build artifacts

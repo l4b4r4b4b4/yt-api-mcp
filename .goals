@@ -1,0 +1,83 @@
+# .cursorrules
+# Project Policy and Best Practices for nix-configs Repository
+
+## Hard Rules (MUST, enforced)
+
+- **Do NOT build or apply systems or switch configurations as an automated agent.**
+  - Agents are NOT allowed to execute or trigger `nixos-rebuild`, `nix build`, `nixos-rebuild switch`, or any equivalent system-altering commands.
+  - Agents may only provide such commands in a code block for instructional purposes, and must always ask for explicit user permission before requesting an action or tool call related to these operations.
+  - Only the user may trigger system state changes on their own system.
+
+- **Changes to system-wide configurations, secrets, or credentials must be reviewed by a human.**
+  - No automation should ever push, merge, or apply such configurations without clear human intervention and audit.
+
+- **Secrets (such as tokens, passwords, keys) must NEVER be committed to this repository.**
+  - Use environment-specific secret management; document placeholder usage.
+
+- **All scripts must declare a shell (shebang) and be marked executable if intended for direct use.**
+
+## Soft Rules (SHOULD, recommended guidelines)
+
+- Prefer declarative and reproducible configuration using NixOS modules or Nix flakes (if applicable).
+- Document all major changes in the README or a relevant documentation file.
+- When introducing new modules or overlays, provide example usages and test coverage where possible.
+- Structure machine, host, and profile-specific configurations under the appropriate subdirectories.
+- Use meaningful, descriptive commit messages adhering to the Conventional Commits convention if possible.
+- Periodically prune the `archive/` and `result/` directories to keep the repository clean and concise.
+- Leverage hardware-configuration.nix or system detection where appropriate instead of hardcoding values.
+- Encourage upstreaming of generic or reusable modules to shared locations.
+- Add comments to all non-trivial Nix expressions, documenting purpose and parameters.
+
+---
+
+## Agent Goals & Tasks Structure
+
+The `.agent/` directory contains a structured system for tracking goals and tasks when working with AI assistants.
+
+### Directory Structure
+
+```
+.agent/
+├── scratchpad.md           # High-level index of all goals
+└── goals/
+    ├── scratchpad.md       # Goals index & tracking
+    ├── 00-Template-Goal/   # Template for new goals
+    │   ├── scratchpad.md   # Goal overview, status, approach
+    │   └── Task-00/        # Template task
+    │       └── scratchpad.md
+    └── 01-Goal-Name/       # Actual goals numbered 01-10
+        ├── scratchpad.md   # Goal details & task list
+        ├── Task-01/
+        │   └── scratchpad.md
+        └── Task-02/
+            └── scratchpad.md
+```
+
+### Working with Goals
+
+1. **Creating a New Goal:**
+   - Copy `00-Template-Goal/` to a new directory (e.g., `02-My-New-Goal/`)
+   - Fill in the goal scratchpad with overview, criteria, and approach
+   - Update `.agent/goals/scratchpad.md` and `.agent/scratchpad.md` indexes
+
+2. **Creating Tasks within a Goal:**
+   - Copy `Task-00/` to a new task directory (e.g., `Task-01/`)
+   - Fill in the task scratchpad with objective, steps, and acceptance criteria
+   - Update the parent goal's task table
+
+3. **Status Tracking:**
+   - 🟢 Complete — Goal/task achieved and verified
+   - 🟡 In Progress — Actively being worked on
+   - 🔴 Blocked — Waiting on dependency or decision
+   - ⚪ Not Started — Planned but not yet begun
+   - ⚫ Archived — Abandoned or superseded
+
+4. **Best Practices:**
+   - Keep scratchpads up to date with session logs
+   - Document decisions with rationale
+   - Link related tasks and external references
+   - Use acceptance criteria as a checklist
+
+---
+
+This file defines the minimum expectations for contributors, agents, and users collaborating in or automating this repository. Hard rules MUST be followed at all times; soft rules are recommendations to maintain quality and consistency.

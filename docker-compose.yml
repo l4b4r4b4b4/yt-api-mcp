@@ -11,17 +11,18 @@
 
 services:
   # Production server
-  fastmcp-template:
+  yt-mcp:
     build:
       context: .
       dockerfile: docker/Dockerfile
       target: production
       args:
         - PYTHON_VERSION=${PYTHON_VERSION:-3.12}
-    image: ghcr.io/l4b4r4b4b4/fastmcp-template:latest
+    image: ghcr.io/l4b4r4b4b4/yt-mcp:latest
     ports:
       - "8000:8000"
     environment:
+      - YOUTUBE_API_KEY=${YOUTUBE_API_KEY}
       - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY:-}
       - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY:-}
       - LANGFUSE_HOST=${LANGFUSE_HOST:-https://cloud.langfuse.com}
@@ -39,6 +40,7 @@ services:
     volumes:
       - ./app:/app/app:ro
     environment:
+      - YOUTUBE_API_KEY=${YOUTUBE_API_KEY}
       - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY:-}
       - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY:-}
       - LANGFUSE_HOST=${LANGFUSE_HOST:-https://cloud.langfuse.com}

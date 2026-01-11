@@ -1,8 +1,8 @@
 # FastMCP Template - Production Dockerfile
 # Extends the base image with the template application
 #
-# Build: docker build -f docker/Dockerfile -t fastmcp-template:latest .
-# Run:   docker run -p 8000:8000 fastmcp-template:latest
+# Build: docker build -f docker/Dockerfile -t yt-mcp:latest .
+# Run:   docker run -p 8000:8000 yt-mcp:latest
 #
 # The server uses streamable-http transport (recommended for remote/Docker).
 # Configure via environment variables:

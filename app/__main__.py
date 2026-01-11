@@ -1,9 +1,9 @@
 """CLI entry point for FastMCP Template Server.
 
 Usage:
-    uvx fastmcp-template stdio           # Local CLI mode (Claude Desktop)
-    uvx fastmcp-template sse             # SSE server mode (deprecated)
-    uvx fastmcp-template streamable-http # Streamable HTTP (recommended for remote)
+    uvx yt-mcp stdio           # Local CLI mode (Claude Desktop)
+    uvx yt-mcp sse             # SSE server mode (deprecated)
+    uvx yt-mcp streamable-http # Streamable HTTP (recommended for remote)
 
 Environment Variables:
     FASTMCP_PORT: Server port for HTTP modes (default: 8000)
@@ -20,7 +20,7 @@ import sys
 import typer
 
 app = typer.Typer(
-    name="fastmcp-template",
+    name="yt-mcp",
     help="FastMCP Template Server with RefCache and Langfuse Tracing",
     add_completion=False,
 )
@@ -169,7 +169,7 @@ def main(
     if version:
         from . import __version__
 
-        typer.echo(f"fastmcp-template {__version__}")
+        typer.echo(f"yt-mcp {__version__}")
         raise typer.Exit()
 
     # If no command provided, show help

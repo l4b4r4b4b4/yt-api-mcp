@@ -43,7 +43,7 @@ def hello(name: str = "World") -> dict[str, Any]:
     """
     return {
         "message": f"Hello, {name}!",
-        "server": "fastmcp-template",
+        "server": "yt-mcp",
     }
 
 

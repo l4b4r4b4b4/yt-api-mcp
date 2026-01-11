@@ -6,7 +6,7 @@ from importlib.metadata import PackageNotFoundError, version
 # This is the single source of truth for versioning
 # Falls back to "0.0.0-dev" when running from source (e.g., Docker with copied files)
 try:
-    __version__ = version("fastmcp-template")
+    __version__ = version("yt-api-mcp")
 except PackageNotFoundError:
     __version__ = "0.0.0-dev"
 

@@ -8,7 +8,41 @@ from __future__ import annotations
 
 from mcp_refcache.fastmcp import cache_guide_prompt
 
-TEMPLATE_GUIDE = f"""# FastMCP Template Guide
+TEMPLATE_GUIDE = f"""# YouTube MCP Server Guide
+
+## Overview
+
+This MCP server provides YouTube search and discovery tools with intelligent caching
+to minimize API quota usage. All operations are traced to Langfuse for observability.
+
+## Quick Start
+
+1. **Search for Videos**
+   ```
+   search_videos("NixOS tutorials", max_results=10)
+   ```
+   Returns video results with titles, descriptions, thumbnails, channels, and URLs.
+   Results are cached for 6 hours.
+
+2. **Search for Channels**
+   ```
+   search_channels("vimjoyer", max_results=5)
+   ```
+   Returns channel results with names, descriptions, thumbnails, and URLs.
+   Results are cached for 6 hours.
+
+3. **Paginate Large Results**
+   Use `get_cached_result` to navigate through cached results:
+   ```
+   get_cached_result(ref_id, page=2, page_size=20)
+   ```
+
+## API Quota Management
+
+- Search operations cost 100 quota units each
+- Default daily quota: 10,000 units (~100 searches)
+- Caching reduces usage by ~4x with 6-hour TTL
+- Clear error messages when quota is exceeded
 
 ## Langfuse Tracing
 
@@ -32,37 +66,7 @@ All tool calls are traced to Langfuse with user/session attribution.
 4. **View in Langfuse Dashboard**
    - Filter by User: "alice"
    - Filter by Session: "chat-001"
-   - Filter by Tags: "fastmcptemplate", "mcprefcache"
-
-## Quick Start
-
-1. **Simple Tool**
-   Use `hello` for a basic greeting:
-   - `hello("World")` → "Hello, World!"
-
-2. **Generate Items (Caching Demo)**
-   Use `generate_items` to create a list:
-   - `generate_items(count=100, prefix="widget")`
-   - Returns ref_id + preview for large results
-   - Cached in the PUBLIC namespace (shared)
-
-3. **Paginate Results**
-   Use `get_cached_result` to navigate large results:
-   - `get_cached_result(ref_id, page=2, page_size=20)`
-
-## Private Computation
-
-Store values that agents can use but not see:
-
-```
-# Store a secret
-store_secret("api_key_hash", 12345.0)
-# Returns ref_id for the secret
-
-# Use in computation (agent never sees the value)
-compute_with_secret(ref_id, multiplier=2.0)
-# Returns the result
-```
+   - Filter by Tags: "yt-mcp", "mcprefcache", "youtube.search"
 
 ---
 
@@ -108,8 +112,8 @@ All tool calls automatically propagate context to Langfuse traces:
 enable_test_context(True)
 set_test_context(user_id="alice", session_id="demo-session")
 
-# 2. Generate items (traced with user attribution)
-result = generate_items(count=100, prefix="widget")
+# 2. Search YouTube (traced with user attribution)
+result = search_videos("NixOS tutorials", max_results=10)
 
 # 3. Retrieve cached result (same user in trace)
 cached = get_cached_result(result["ref_id"])
@@ -125,7 +129,7 @@ info = get_trace_info()
 3. Filter by:
    - **User**: "alice" (or any user_id you set)
    - **Session**: "demo-session"
-   - **Tags**: "fastmcptemplate", "mcprefcache", "cacheset", "cacheget"
+   - **Tags**: "yt-mcp", "mcprefcache", "cacheset", "cacheget", "youtube.search"
    - **Metadata**: orgid, agentid, cachenamespace
 
 ## Best Practices

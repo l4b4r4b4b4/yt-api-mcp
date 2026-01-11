@@ -218,10 +218,10 @@ def traced_tool(arg: str) -> dict:
 
 ```bash
 # Run with stdio (default, for Claude Desktop)
-uv run fastmcp-template
+uv run yt-mcp
 
 # Run with SSE (for web clients)
-uv run fastmcp-template --transport sse --port 8000 --host 0.0.0.0
+uv run yt-mcp --transport sse --port 8000 --host 0.0.0.0
 ```
 
 ## Docker Deployment
@@ -233,8 +233,8 @@ The project provides three Docker configurations:
 | Image | Base | Use Case |
 |-------|------|----------|
 | `fastmcp-base` | Chainguard Python | Secure base for all FastMCP servers |
-| `fastmcp-template` | fastmcp-base | This template application |
-| `fastmcp-template:dev` | python:3.12-slim | Development with hot reload |
+| `yt-mcp` | fastmcp-base | This template application |
+| `yt-mcp:dev` | python:3.12-slim | Development with hot reload |
 
 ### Why Chainguard?
 
@@ -252,26 +252,26 @@ The project provides three Docker configurations:
 docker build -f docker/Dockerfile.base -t fastmcp-base:latest .
 
 # Build app image
-docker build -f docker/Dockerfile -t fastmcp-template:latest .
+docker build -f docker/Dockerfile -t yt-mcp:latest .
 
 # Build dev image
-docker build -f docker/Dockerfile.dev -t fastmcp-template:dev .
+docker build -f docker/Dockerfile.dev -t yt-mcp:dev .
 ```
 
 ### Running Containers
 
 ```bash
 # Production mode
-docker run -p 8000:8000 fastmcp-template:latest
+docker run -p 8000:8000 yt-mcp:latest
 
 # With Langfuse tracing
 docker run -p 8000:8000 \
   -e LANGFUSE_PUBLIC_KEY=pk-... \
   -e LANGFUSE_SECRET_KEY=sk-... \
-  fastmcp-template:latest
+  yt-mcp:latest
 
 # Development mode with hot reload
-docker run -p 8000:8000 -v $(pwd)/app:/app/app:ro fastmcp-template:dev
+docker run -p 8000:8000 -v $(pwd)/app:/app/app:ro yt-mcp:dev
 ```
 
 ### Docker Compose
@@ -309,7 +309,7 @@ The GitHub Actions workflow automatically builds and publishes images:
 # Triggered on push to main or version tags
 # Images published to:
 #   ghcr.io/l4b4r4b4b4/fastmcp-base:latest
-#   ghcr.io/l4b4r4b4b4/fastmcp-template:latest
+#   ghcr.io/l4b4r4b4b4/yt-mcp:latest
 ```
 
 ## Troubleshooting

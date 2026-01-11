@@ -1,0 +1,62 @@
+# .envrc.local.example - Local environment overrides for Nix devShell
+#
+# This file is a TEMPLATE. Your actual secrets go in .envrc.local (gitignored).
+#
+# Setup Instructions:
+# 1. Copy this file: cp .envrc.local.example .envrc.local
+# 2. Edit .envrc.local and replace placeholder values with your real credentials
+# 3. The .envrc file will automatically source .envrc.local if it exists
+# 4. Restart your shell: exit and run 'nix develop' again
+
+# ==============================================================================
+# REQUIRED: YouTube Data API v3 Key
+# ==============================================================================
+# Get your key at: https://console.cloud.google.com/apis/credentials
+#
+# Steps:
+# 1. Go to Google Cloud Console
+# 2. Create a project (or select existing)
+# 3. Enable "YouTube Data API v3"
+# 4. Create credentials → API key
+# 5. (Recommended) Restrict key to YouTube Data API v3 only
+#
+# Free tier quota: 10,000 units/day (~100 searches)
+# Each search costs 100 units
+export YOUTUBE_API_KEY="AIzaSy_REPLACE_WITH_YOUR_ACTUAL_KEY"
+
+# ==============================================================================
+# OPTIONAL: Langfuse Tracing (for observability and debugging)
+# ==============================================================================
+# Sign up at: https://cloud.langfuse.com
+# Or self-host: https://langfuse.com/docs/deployment/self-host
+#
+# Provides:
+# - Trace all MCP tool calls
+# - Monitor API usage and caching
+# - Debug performance issues
+# - Track user sessions and context
+#
+# export LANGFUSE_PUBLIC_KEY="pk-lf-REPLACE_WITH_YOUR_KEY"
+# export LANGFUSE_SECRET_KEY="sk-lf-REPLACE_WITH_YOUR_KEY"
+# export LANGFUSE_HOST="https://cloud.langfuse.com"
+
+# ==============================================================================
+# OPTIONAL: Advanced YouTube API Settings
+# ==============================================================================
+# Uncomment and customize if needed
+#
+# Quota user tracking (helps identify quota usage by user)
+# export YOUTUBE_API_QUOTA_USER="your-user-id"
+#
+# Custom API endpoint (for testing or proxies)
+# export YOUTUBE_API_ENDPOINT="https://www.googleapis.com/youtube/v3"
+
+# ==============================================================================
+# OPTIONAL: Development Settings
+# ==============================================================================
+# Debug logging
+# export DEBUG=1
+# export LOG_LEVEL="DEBUG"
+#
+# Disable caching (for testing)
+# export DISABLE_CACHE=1

@@ -67,7 +67,7 @@ concurrency:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository_owner }}/fastmcp-template
+  IMAGE_NAME: ${{ github.repository_owner }}/yt-mcp
 
 jobs:
   # Gate: Only proceed if Release workflow passed
@@ -120,7 +120,7 @@ jobs:
   #         username: ${{ secrets.DEPLOY_USER }}
   #         key: ${{ secrets.DEPLOY_SSH_KEY }}
   #         script: |
-  #           cd /opt/fastmcp-template
+  #           cd /opt/yt-mcp
   #           docker compose pull
   #           docker compose up -d
   #
@@ -140,10 +140,10 @@ jobs:
   #         echo "${{ secrets.KUBECONFIG }}" | base64 -d > ~/.kube/config
   #     - name: Deploy
   #       run: |
-  #         kubectl set image deployment/fastmcp-template \
-  #           fastmcp-template=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.check-release.outputs.image_tag }} \
+  #         kubectl set image deployment/yt-mcp \
+  #           yt-mcp=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.check-release.outputs.image_tag }} \
   #           -n fastmcp
-  #         kubectl rollout status deployment/fastmcp-template -n fastmcp
+  #         kubectl rollout status deployment/yt-mcp -n fastmcp
   #
   # Option 3: Fly.io
   # ----------------

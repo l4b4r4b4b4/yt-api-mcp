@@ -1,6 +1,6 @@
-# Contributing to fastmcp-template
+# Contributing to yt-mcp
 
-Thank you for your interest in contributing to fastmcp-template! This document outlines the conventions and guidelines for contributing to this project.
+Thank you for your interest in contributing to yt-mcp! This document outlines the conventions and guidelines for contributing to this project.
 
 ## Development Setup
 
@@ -14,8 +14,8 @@ Thank you for your interest in contributing to fastmcp-template! This document o
 
 ```bash
 # Clone the repository
-git clone https://github.com/l4b4r4b4b4/fastmcp-template
-cd fastmcp-template
+git clone https://github.com/l4b4r4b4b4/yt-mcp
+cd yt-mcp
 
 # Option 1: Use Nix dev shell (recommended)
 nix develop

@@ -1,6 +1,6 @@
 [project]
-name = "fastmcp-template"
-version = "0.0.3"
+name = "yt-api-mcp"
+version = "0.0.0"
 description = "FastMCP server template with mcp-refcache and Langfuse tracing"
 readme = "README.md"
 authors = [
@@ -9,25 +9,40 @@ authors = [
 requires-python = ">=3.12"
 dependencies = [
     "fastmcp>=2.14.0",
+    "google-api-python-client>=2.187.0",
     "langfuse>=3.10.0",
     "mcp-refcache>=0.1.0",
     "pydantic>=2.10.0",
     "pydantic-settings>=2.10.0",
     "typer>=0.15.0",
+    "youtube-transcript-api>=1.2.3",
 ]
 
 [project.scripts]
-fastmcp-template = "app.__main__:app"
+yt-mcp = "app.__main__:app"
 
 [build-system]
 requires = ["hatchling>=1.0.0"]
 build-backend = "hatchling.build"
 
+[tool.hatch.build]
+exclude = [
+    ".direnv/",
+    ".envrc",
+    ".envrc.local",
+    "archive/",
+    "tests/",
+    ".pytest_cache/",
+    ".mypy_cache/",
+    ".coverage",
+    "*.egg-info/",
+]
+
 [tool.hatch.build.targets.wheel]
 packages = ["app"]
 
 [tool.uv]
-compile-bytecode = true
+compile-bytecode = false
 
 [dependency-groups]
 dev = [

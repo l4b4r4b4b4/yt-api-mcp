@@ -33,7 +33,7 @@ def create_health_check(cache: RefCache) -> Any:
         """
         return {
             "status": "healthy",
-            "server": "fastmcp-template",
+            "server": "yt-mcp",
             "cache": cache.name,
             "langfuse_enabled": is_langfuse_enabled(),
             "test_mode": is_test_mode_enabled(),

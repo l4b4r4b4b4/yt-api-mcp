@@ -59,7 +59,7 @@ concurrency:
 env:
   REGISTRY: ghcr.io
   BASE_IMAGE_NAME: ${{ github.repository_owner }}/fastmcp-base
-  APP_IMAGE_NAME: ${{ github.repository_owner }}/fastmcp-template
+  APP_IMAGE_NAME: ${{ github.repository_owner }}/yt-mcp
 
 jobs:
   # Gate: Only proceed if CI passed (or tag push / manual trigger)

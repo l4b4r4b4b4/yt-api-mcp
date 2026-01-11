@@ -93,7 +93,7 @@ ENV PYTHONDONTWRITEBYTECODE=1
 EXPOSE 8000
 
 # Labels for container metadata
-LABEL org.opencontainers.image.source="https://github.com/l4b4r4b4b4/fastmcp-template"
+LABEL org.opencontainers.image.source="https://github.com/l4b4r4b4b4/yt-mcp"
 LABEL org.opencontainers.image.description="FastMCP Base Image with mcp-refcache"
 LABEL org.opencontainers.image.licenses="MIT"
 LABEL org.opencontainers.image.base.name="python:${PYTHON_VERSION}-slim"

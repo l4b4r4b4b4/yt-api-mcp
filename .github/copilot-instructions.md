@@ -1,4 +1,4 @@
-# GitHub Copilot Instructions for fastmcp-template
+# GitHub Copilot Instructions for yt-mcp
 
 This is a FastMCP server project using mcp-refcache for reference-based caching and optional Langfuse tracing.
 

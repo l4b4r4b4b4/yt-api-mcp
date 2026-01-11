@@ -1,1 +1,1 @@
-"""Tests for fastmcp-template MCP server."""
+"""Tests for yt-mcp MCP server."""

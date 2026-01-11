@@ -1,4 +1,4 @@
-"""Pytest configuration and fixtures for fastmcp-template tests."""
+"""Pytest configuration and fixtures for yt-mcp tests."""
 
 from __future__ import annotations
 

@@ -32,7 +32,7 @@ def _get_default_sqlite_path() -> str:
     else:
         base_dir = Path.home() / ".local" / "share"
 
-    return str(base_dir / "fastmcp-template" / "cache.db")
+    return str(base_dir / "yt-mcp" / "cache.db")
 
 
 class Settings(BaseSettings):
@@ -86,6 +86,12 @@ class Settings(BaseSettings):
         description="Langfuse host URL.",
     )
 
+    # YouTube API configuration
+    youtube_api_key: str | None = Field(
+        default=None,
+        description="YouTube Data API v3 key for accessing YouTube services.",
+    )
+
     @field_validator("sqlite_path")
     @classmethod
     def expand_sqlite_path(cls, value: str) -> str:
@@ -96,6 +102,11 @@ class Settings(BaseSettings):
     def langfuse_enabled(self) -> bool:
         """Check if Langfuse credentials are configured."""
         return bool(self.langfuse_public_key and self.langfuse_secret_key)
+
+    @property
+    def youtube_enabled(self) -> bool:
+        """Check if YouTube API key is configured."""
+        return bool(self.youtube_api_key)
 
     def get_cache_backend_for_transport(
         self,
