@@ -67,6 +67,11 @@ Live Streaming Tools:
 - get_live_chat_id: Get chat ID for live video (cached 5m)
 - get_live_chat_messages: Get recent live chat with pagination (cached 30s)
 
+Semantic Search Tools:
+- warmup_semantic_search: Pre-load embedding model (~270MB download on first run) - call before first search
+- semantic_search_transcripts: Search transcripts with natural language (auto-indexes missing videos)
+- index_channel_transcripts: Pre-index all transcripts from a channel (optional, for warming cache)
+
 Cache Management:
 - get_cached_result: Retrieve or paginate through cached results
 - Admin tools available for cache inspection and management
@@ -106,6 +111,16 @@ Live Streaming Notes:
 - 30 second cache prevents excessive API usage during polling
 - Same API quota as other tools (1 unit per request)
 - For true real-time experience with instant updates, use YouTube web interface
+
+Semantic Search Notes:
+- FIRST TIME: Call warmup_semantic_search to download the embedding model (~270MB, 30-60s)
+- semantic_search_transcripts is the primary tool - just search, it handles indexing automatically
+- First search on new content is slower (1-2 min for 50 videos) due to indexing
+- Subsequent searches are fast (content already indexed in vector database)
+- Supports searching multiple channels and/or specific videos in one query
+- Returns timestamped URLs for direct playback at matching segments
+- Uses Nomic Matryoshka embeddings with ChromaDB vector store
+- Indexing uses ~1 API quota unit per video (transcripts themselves are free)
 
 {cache_instructions()}
 """,
@@ -647,6 +662,148 @@ async def get_live_chat_messages(
 
     result = await get_live_chat_messages_impl(video_id, max_results, page_token)
     return result  # type: ignore[return-value]
+
+
+# =============================================================================
+# Semantic Search Tools
+# =============================================================================
+
+
+@mcp.tool
+async def warmup_semantic_search() -> dict[str, Any]:
+    """Pre-load the embedding model and vector store for semantic search.
+
+    Call this before your first semantic search to avoid timeout. Downloads
+    and initializes the Nomic embedding model (~270MB) and creates the vector
+    store connection.
+
+    The warmup process:
+    1. Downloads the embedding model (if not cached)
+    2. Loads the model into memory
+    3. Runs a test embedding to warm up inference
+    4. Initializes the vector store connection
+
+    Returns:
+        Dictionary with warmup status:
+        - status: "ready" if successful
+        - model: Name of the embedding model loaded
+        - dimensionality: Embedding dimensions configured
+        - inference_mode: How embeddings are computed (local/remote)
+        - test_embedding_size: Size of test embedding (confirms model works)
+        - warmup_time_seconds: Time taken to warm up
+
+    Note:
+        - First call downloads ~270MB model (takes 30-60 seconds)
+        - Subsequent calls are instant (model cached on disk)
+        - Model stays in memory for fast inference after warmup
+    """
+    from app.tools.youtube.semantic.tools import (
+        warmup_semantic_search as warmup_impl,
+    )
+
+    return await warmup_impl()
+
+
+@mcp.tool
+async def semantic_search_transcripts(
+    query: str,
+    channel_ids: list[str] | None = None,
+    video_ids: list[str] | None = None,
+    k: int = 10,
+    language: str = "en",
+    max_videos_per_channel: int = 50,
+    min_score: float | None = None,
+) -> dict[str, Any]:
+    """Search transcripts using natural language with automatic indexing.
+
+    Performs semantic similarity search over video transcripts. Automatically
+    indexes any missing transcripts before searching, providing a seamless
+    experience without requiring explicit indexing calls.
+
+    Args:
+        query: Natural language search query (e.g., "Nix garbage collection generations").
+        channel_ids: Optional list of YouTube channel IDs to scope the search.
+            Videos from these channels will be auto-indexed if not already indexed.
+        video_ids: Optional list of specific video IDs to scope the search.
+            These videos will be auto-indexed if not already indexed.
+        k: Number of results to return (default: 10).
+        language: Preferred transcript language code (default: "en").
+        max_videos_per_channel: Maximum videos to fetch per channel (default: 50).
+        min_score: Optional minimum similarity score threshold (lower is better).
+
+    Returns:
+        Dictionary with search results including:
+        - query: The original search query
+        - results: List of matches with video info, text, timestamps, and scores
+        - total_results: Number of results returned
+        - indexing_stats: Statistics about auto-indexing performed
+        - scope: Description of search scope applied
+
+    Note:
+        - First search on new content will be slower due to indexing (~1-2 min for 50 videos)
+        - Subsequent searches are fast (already indexed)
+        - If neither channel_ids nor video_ids provided, searches all indexed content
+        - Results include timestamp URLs for direct playback at matching segments
+    """
+    from app.tools.youtube.semantic.tools import (
+        semantic_search_transcripts as semantic_search_impl,
+    )
+
+    return await semantic_search_impl(
+        query=query,
+        channel_ids=channel_ids,
+        video_ids=video_ids,
+        k=k,
+        language=language,
+        max_videos_per_channel=max_videos_per_channel,
+        min_score=min_score,
+    )
+
+
+@mcp.tool
+async def index_channel_transcripts(
+    channel_id: str,
+    max_videos: int = 50,
+    language: str = "en",
+    force_reindex: bool = False,
+) -> dict[str, Any]:
+    """Pre-index all video transcripts from a YouTube channel.
+
+    This is an optional tool for pre-warming the semantic search index.
+    You don't need to call this before searching - semantic_search_transcripts
+    automatically indexes missing videos. Use this only if you want to
+    explicitly prepare a channel's content for faster first searches.
+
+    Args:
+        channel_id: YouTube channel ID (e.g., "UCuAXFkgsw1L7xaCfnd5JJOw").
+        max_videos: Maximum number of videos to index (default: 50).
+        language: Preferred transcript language code (default: "en").
+        force_reindex: If True, re-index videos even if already indexed.
+
+    Returns:
+        Dictionary with indexing results:
+        - indexed_count: Number of videos successfully indexed
+        - chunk_count: Total chunks created
+        - skipped_count: Videos skipped (already indexed or no transcript)
+        - error_count: Number of failed videos
+        - errors: List of error messages
+        - video_ids: List of indexed video IDs
+
+    Note:
+        - Indexing 50 videos takes ~1-2 minutes
+        - Uses ~1 API quota unit per video (transcripts are free)
+        - Subsequent semantic searches on this channel will be fast
+    """
+    from app.tools.youtube.semantic.tools import (
+        index_channel_transcripts as index_channel_impl,
+    )
+
+    return await index_channel_impl(
+        channel_id=channel_id,
+        max_videos=max_videos,
+        language=language,
+        force_reindex=force_reindex,
+    )
 
 
 # Context management tools

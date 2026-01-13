@@ -11,6 +11,37 @@ if TYPE_CHECKING:
     from collections.abc import Generator
 
 
+@pytest.fixture(autouse=True)
+def clear_semantic_caches() -> Generator[None, None, None]:
+    """Clear lru_cache on semantic search singletons between tests.
+
+    This fixture runs automatically before each test to prevent test pollution
+    from cached vector stores, embeddings, and config objects.
+
+    The lru_cache on these functions causes issues when:
+    1. A test calls the real function (caches the real instance)
+    2. A later test tries to mock the function (gets cached real instance instead)
+
+    By clearing caches before each test, we ensure a clean slate.
+    """
+    # Import the cached functions
+    from app.tools.youtube.semantic.config import get_semantic_config
+    from app.tools.youtube.semantic.embeddings import get_embeddings
+    from app.tools.youtube.semantic.store import get_vector_store
+
+    # Clear all semantic search related caches before the test
+    get_vector_store.cache_clear()
+    get_embeddings.cache_clear()
+    get_semantic_config.cache_clear()
+
+    yield
+
+    # Also clear after the test to be safe
+    get_vector_store.cache_clear()
+    get_embeddings.cache_clear()
+    get_semantic_config.cache_clear()
+
+
 @pytest.fixture
 def cache() -> Generator[RefCache, None, None]:
     """Create a fresh RefCache instance for testing."""

@@ -1,7 +1,8 @@
 """Tests for YouTube search tools.
 
-This module tests search_videos, search_channels, and search_live_videos functions,
-including success paths, error handling, validation, and edge cases.
+This module tests search_videos, search_channels, search_live_videos, and
+get_channel_videos functions, including success paths, error handling,
+validation, and edge cases.
 """
 
 from __future__ import annotations
@@ -17,7 +18,12 @@ from app.tools.youtube.client import (
     YouTubeNotFoundError,
     YouTubeQuotaExceededError,
 )
-from app.tools.youtube.search import search_channels, search_live_videos, search_videos
+from app.tools.youtube.search import (
+    get_channel_videos,
+    search_channels,
+    search_live_videos,
+    search_videos,
+)
 
 # =============================================================================
 # Test Fixtures
@@ -596,3 +602,211 @@ class TestSearchLiveVideos:
         assert call_kwargs["part"] == "snippet"
         assert call_kwargs["type"] == "video"
         assert call_kwargs["q"] == "news"
+
+
+# =============================================================================
+# Tests: get_channel_videos
+# =============================================================================
+
+
+class TestGetChannelVideos:
+    """Tests for get_channel_videos function."""
+
+    @pytest.mark.asyncio
+    async def test_get_channel_videos_success(
+        self, mock_youtube_service, sample_video_response
+    ):
+        """Test successful retrieval of channel videos."""
+        service, execute_mock = mock_youtube_service
+        execute_mock.execute.return_value = sample_video_response
+
+        with patch(
+            "app.tools.youtube.search.get_youtube_service", return_value=service
+        ):
+            results = await get_channel_videos(
+                "UCuAXFkgsw1L7xaCfnd5JJO1", max_results=10
+            )
+
+        assert len(results) == 2
+        assert results[0]["video_id"] == "video123"
+        assert results[0]["title"] == "NixOS Garbage Collection Tutorial"
+        assert results[0]["channel_title"] == "Vimjoyer"
+        assert results[0]["url"] == "https://www.youtube.com/watch?v=video123"
+
+    @pytest.mark.asyncio
+    async def test_get_channel_videos_empty_results(
+        self, mock_youtube_service, empty_response
+    ):
+        """Test handling of empty results."""
+        service, execute_mock = mock_youtube_service
+        execute_mock.execute.return_value = empty_response
+
+        with patch(
+            "app.tools.youtube.search.get_youtube_service", return_value=service
+        ):
+            results = await get_channel_videos("UCuAXFkgsw1L7xaCfnd5JJO1")
+
+        assert results == []
+
+    @pytest.mark.asyncio
+    async def test_get_channel_videos_invalid_channel_id_empty(self):
+        """Test validation rejects empty channel ID."""
+        with pytest.raises(ValueError, match="must be a non-empty string"):
+            await get_channel_videos("")
+
+    @pytest.mark.asyncio
+    async def test_get_channel_videos_invalid_channel_id_format(self):
+        """Test validation rejects invalid channel ID format."""
+        with pytest.raises(ValueError, match="Invalid channel ID format"):
+            await get_channel_videos("invalid_id")
+
+    @pytest.mark.asyncio
+    async def test_get_channel_videos_invalid_channel_id_wrong_prefix(self):
+        """Test validation rejects channel ID without UC prefix."""
+        with pytest.raises(ValueError, match="start with 'UC'"):
+            await get_channel_videos("ABuAXFkgsw1L7xaCfnd5JJO1")
+
+    @pytest.mark.asyncio
+    async def test_get_channel_videos_clamps_max_results_upper(
+        self, mock_youtube_service, sample_video_response
+    ):
+        """Test max_results is clamped to 50."""
+        service, execute_mock = mock_youtube_service
+        execute_mock.execute.return_value = sample_video_response
+
+        with patch(
+            "app.tools.youtube.search.get_youtube_service", return_value=service
+        ):
+            await get_channel_videos("UCuAXFkgsw1L7xaCfnd5JJO1", max_results=100)
+
+        call_kwargs = service.search.return_value.list.call_args[1]
+        assert call_kwargs["maxResults"] == 50
+
+    @pytest.mark.asyncio
+    async def test_get_channel_videos_clamps_max_results_lower(
+        self, mock_youtube_service, sample_video_response
+    ):
+        """Test max_results is clamped to minimum of 1."""
+        service, execute_mock = mock_youtube_service
+        execute_mock.execute.return_value = sample_video_response
+
+        with patch(
+            "app.tools.youtube.search.get_youtube_service", return_value=service
+        ):
+            await get_channel_videos("UCuAXFkgsw1L7xaCfnd5JJO1", max_results=0)
+
+        call_kwargs = service.search.return_value.list.call_args[1]
+        assert call_kwargs["maxResults"] == 1
+
+    @pytest.mark.asyncio
+    async def test_get_channel_videos_uses_channel_id_filter(
+        self, mock_youtube_service, sample_video_response
+    ):
+        """Test that channelId filter is correctly applied."""
+        service, execute_mock = mock_youtube_service
+        execute_mock.execute.return_value = sample_video_response
+
+        with patch(
+            "app.tools.youtube.search.get_youtube_service", return_value=service
+        ):
+            await get_channel_videos("UCuAXFkgsw1L7xaCfnd5JJO1", max_results=10)
+
+        call_kwargs = service.search.return_value.list.call_args[1]
+        assert call_kwargs["channelId"] == "UCuAXFkgsw1L7xaCfnd5JJO1"
+        assert call_kwargs["type"] == "video"
+        assert call_kwargs["part"] == "snippet"
+
+    @pytest.mark.asyncio
+    async def test_get_channel_videos_respects_order(
+        self, mock_youtube_service, sample_video_response
+    ):
+        """Test that order parameter is passed correctly."""
+        service, execute_mock = mock_youtube_service
+        execute_mock.execute.return_value = sample_video_response
+
+        with patch(
+            "app.tools.youtube.search.get_youtube_service", return_value=service
+        ):
+            await get_channel_videos(
+                "UCuAXFkgsw1L7xaCfnd5JJO1", max_results=10, order="viewCount"
+            )
+
+        call_kwargs = service.search.return_value.list.call_args[1]
+        assert call_kwargs["order"] == "viewCount"
+
+    @pytest.mark.asyncio
+    async def test_get_channel_videos_default_order_is_date(
+        self, mock_youtube_service, sample_video_response
+    ):
+        """Test that default order is 'date'."""
+        service, execute_mock = mock_youtube_service
+        execute_mock.execute.return_value = sample_video_response
+
+        with patch(
+            "app.tools.youtube.search.get_youtube_service", return_value=service
+        ):
+            await get_channel_videos("UCuAXFkgsw1L7xaCfnd5JJO1")
+
+        call_kwargs = service.search.return_value.list.call_args[1]
+        assert call_kwargs["order"] == "date"
+
+    @pytest.mark.asyncio
+    async def test_get_channel_videos_invalid_order_defaults_to_date(
+        self, mock_youtube_service, sample_video_response
+    ):
+        """Test that invalid order falls back to 'date'."""
+        service, execute_mock = mock_youtube_service
+        execute_mock.execute.return_value = sample_video_response
+
+        with patch(
+            "app.tools.youtube.search.get_youtube_service", return_value=service
+        ):
+            await get_channel_videos("UCuAXFkgsw1L7xaCfnd5JJO1", order="invalid_order")
+
+        call_kwargs = service.search.return_value.list.call_args[1]
+        assert call_kwargs["order"] == "date"
+
+    @pytest.mark.asyncio
+    async def test_get_channel_videos_handles_quota_error(self, mock_youtube_service):
+        """Test handling of quota exceeded error."""
+        service, execute_mock = mock_youtube_service
+        execute_mock.execute.side_effect = HttpError(
+            resp=Mock(status=403),
+            content=b'{"error": {"message": "quota exceeded"}}',
+        )
+
+        with (
+            patch("app.tools.youtube.search.get_youtube_service", return_value=service),
+            pytest.raises(YouTubeQuotaExceededError),
+        ):
+            await get_channel_videos("UCuAXFkgsw1L7xaCfnd5JJO1")
+
+    @pytest.mark.asyncio
+    async def test_get_channel_videos_handles_auth_error(self, mock_youtube_service):
+        """Test handling of authentication error."""
+        service, execute_mock = mock_youtube_service
+        execute_mock.execute.side_effect = HttpError(
+            resp=Mock(status=401),
+            content=b'{"error": {"message": "unauthorized"}}',
+        )
+
+        with (
+            patch("app.tools.youtube.search.get_youtube_service", return_value=service),
+            pytest.raises(YouTubeAuthError),
+        ):
+            await get_channel_videos("UCuAXFkgsw1L7xaCfnd5JJO1")
+
+    @pytest.mark.asyncio
+    async def test_get_channel_videos_handles_generic_error(self, mock_youtube_service):
+        """Test handling of generic API error."""
+        service, execute_mock = mock_youtube_service
+        execute_mock.execute.side_effect = HttpError(
+            resp=Mock(status=500),
+            content=b'{"error": {"message": "internal server error"}}',
+        )
+
+        with (
+            patch("app.tools.youtube.search.get_youtube_service", return_value=service),
+            pytest.raises(YouTubeAPIError),
+        ):
+            await get_channel_videos("UCuAXFkgsw1L7xaCfnd5JJO1")

@@ -1,6 +1,6 @@
 [project]
 name = "yt-api-mcp"
-version = "0.0.1"
+version = "0.0.2"
 description = "FastMCP server template with mcp-refcache and Langfuse tracing"
 readme = "README.md"
 authors = [
@@ -10,12 +10,24 @@ requires-python = ">=3.12"
 dependencies = [
     "fastmcp>=2.14.0",
     "google-api-python-client>=2.187.0",
+    "langchain-chroma>=1.1.0",
+    "langchain-core>=1.2.7",
+    "langchain-nomic>=1.0.1",
+    "langchain-text-splitters>=1.1.0",
     "langfuse>=3.10.0",
     "mcp-refcache>=0.1.0",
+    "nomic[local]>=3.9.0",
     "pydantic>=2.10.0",
     "pydantic-settings>=2.10.0",
+    "tiktoken>=0.12.0",
     "typer>=0.15.0",
     "youtube-transcript-api>=1.2.3",
+]
+
+[project.optional-dependencies]
+huggingface = [
+    "tokenizers>=0.21.0",
+    "huggingface_hub>=0.30.0",
 ]
 
 [project.scripts]
@@ -83,6 +95,9 @@ known-first-party = ["app"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+]
 python_files = ["test_*.py"]
 python_functions = ["test_*"]
 python_classes = ["Test*"]

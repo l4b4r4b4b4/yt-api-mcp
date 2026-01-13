@@ -4,6 +4,52 @@ This file defines **hard** (must-follow) and **soft** (recommended) rules for MC
 
 ---
 
+## Model Context Lengths
+
+Reference for AI model context windows. Monitor token usage and plan handoffs accordingly.
+
+### Anthropic Models
+
+| Model | Hard Limit | Soft Limit (Zed) | Notes |
+|-------|------------|------------------|-------|
+| Claude Opus 4.5 | 200k | 128k | High capability, expensive |
+| Claude Sonnet 4 | 200k | 128k | Balanced capability/cost |
+| Claude Sonnet 3.5 | 200k | 128k | Previous gen |
+| Claude Haiku 3.5 | 200k | 128k | Fast, cost-effective |
+
+### OpenAI Models
+
+| Model | Hard Limit | Soft Limit (Zed) | Notes |
+|-------|------------|------------------|-------|
+| GPT-4o | 128k | 64k | OpenAI flagship |
+| GPT-4o-mini | 128k | 128k | Cost-effective |
+| GPT-4 Turbo | 128k | 128k | OpenAI |
+| GPT-4 | 8k / 32k | 128k | Legacy versions |
+| o1 | 200k | 128k | Reasoning model |
+| o1-mini | 128k | 128k | Reasoning, smaller |
+
+### Other Models
+
+| Model | Hard Limit | Soft Limit (Zed) | Notes |
+|-------|------------|------------------|-------|
+| Gemini 1.5 Pro | 1M / 2M | 128k | Google |
+| Gemini 1.5 Flash | 1M | 128k | Google, fast |
+| Llama 3.1 405B | 128k | 128k | Meta, open source |
+
+**Note:** Soft limits in Zed may be lower than hard limits for cost/performance reasons.
+
+### Hard Rules
+- **Plan handoffs at 105% of soft limit** - Soft limits have buffer room
+- **Track token usage** - System reports current usage
+- **Summarize before handoff** - Update scratchpad, provide handoff prompt
+
+### Soft Rules
+- Prefer smaller context for simple tasks (cost efficiency)
+- Break large tasks into multiple sessions
+- Use scratchpads to persist state across sessions
+
+---
+
 ## General Rules
 
 ### Hard Rules

@@ -51,7 +51,6 @@
       "cwd": "{worktree_root}",
       "env": {
         "PYTHONUNBUFFERED": "1",
-        "YOUTUBE_API_KEY": "YOUR_KEY_HERE",
       },
     },
     "yt-mcp-server-local": {
@@ -66,7 +65,6 @@
         "LANGFUSE_SECRET_KEY": "",
         "LANGFUSE_HOST": "https://cloud.langfuse.com",
         "PYTHONUNBUFFERED": "1",
-        "YOUTUBE_API_KEY": "YOUR_KEY_HERE",
       },
     },
   },
