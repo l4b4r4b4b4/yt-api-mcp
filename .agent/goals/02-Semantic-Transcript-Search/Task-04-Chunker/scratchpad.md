@@ -134,9 +134,19 @@ Document(
 - Timestamps in seconds (float)
 - chunk_index is 0-indexed
 
+### Required Enhancement: Token-Based Chunking
+
+**IMPORTANT:** Current implementation uses character count, but embedding models have **token limits**, not character limits. Character count is inconsistent across languages and content.
+
+**TODO:**
+- Use tiktoken or model's tokenizer to count tokens instead of characters
+- `chunk_size` should be in tokens (e.g., 256 tokens for 512-dim embeddings)
+- Consider using langchain's `TokenTextSplitter` as reference
+- NomicEmbeddings has 8192 token context window
+
 ### Future Enhancement: Chapter Awareness
 
-**TODO:** YouTube transcripts can have chapter markers (from video descriptions) that would be natural chunk boundaries. Consider:
+**TODO:** YouTube videos can have chapter markers (from video descriptions) that would be natural chunk boundaries. Consider:
 - Accept optional `chapters` parameter with start times and titles
 - Prefer chapter boundaries over arbitrary chunk_size splits
 - Include chapter title in chunk metadata
