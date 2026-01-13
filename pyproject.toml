@@ -16,6 +16,7 @@ dependencies = [
     "langchain-text-splitters>=1.1.0",
     "langfuse>=3.10.0",
     "mcp-refcache>=0.1.0",
+    "nomic[local]>=3.9.0",
     "pydantic>=2.10.0",
     "pydantic-settings>=2.10.0",
     "typer>=0.15.0",
@@ -87,6 +88,9 @@ known-first-party = ["app"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+]
 python_files = ["test_*.py"]
 python_functions = ["test_*"]
 python_classes = ["Test*"]

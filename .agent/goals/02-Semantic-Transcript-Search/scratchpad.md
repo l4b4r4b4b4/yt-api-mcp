@@ -293,7 +293,7 @@ langchain-core = ">=1.0.0"
 | Task | Description | Status | Notes |
 |------|-------------|--------|-------|
 | Task-01 | Setup: Add LangChain dependencies, create module structure | 🟠 | Done, awaiting validation |
-| Task-02 | Embeddings: Configure Nomic Matryoshka embeddings | ⚪ | 512 dims default |
+| Task-02 | Embeddings: Configure Nomic Matryoshka embeddings | 🟠 | Done, tests added |
 | Task-03 | Vector Store: Initialize Chroma with HNSW settings | ⚪ | Persistence options |
 | Task-04 | Chunker: Transcript-aware splitter with timestamps | ⚪ | Preserve metadata |
 | Task-05 | Indexer: Batch indexing logic with progress | ⚪ | Error handling |

@@ -63,10 +63,23 @@ class SemanticSearchConfig(BaseSettings):
         default="nomic-embed-text-v1.5",
         description="Nomic embedding model name.",
     )
-    embedding_dimensionality: Literal[64, 128, 256, 512, 768] = Field(
+    embedding_dimensionality: int = Field(
         default=512,
-        description="Matryoshka embedding dimensionality. Lower = faster, higher = better quality.",
+        description="Matryoshka embedding dimensionality. Valid: 64, 128, 256, 512, 768.",
     )
+
+    @field_validator("embedding_dimensionality", mode="before")
+    @classmethod
+    def validate_dimensionality(cls, value: str | int) -> int:
+        """Convert string to int and validate Matryoshka dimensions."""
+        if isinstance(value, str):
+            value = int(value)
+        valid_dims = {64, 128, 256, 512, 768}
+        if value not in valid_dims:
+            msg = f"embedding_dimensionality must be one of {sorted(valid_dims)}, got {value}"
+            raise ValueError(msg)
+        return value
+
     embedding_inference_mode: Literal["local", "remote", "dynamic"] = Field(
         default="local",
         description="Inference mode: 'local' (Embed4All), 'remote' (API), 'dynamic' (auto).",

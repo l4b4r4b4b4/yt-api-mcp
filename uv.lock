@@ -765,6 +765,20 @@ wheels = [
 ]
 
 [[package]]
+name = "gpt4all"
+version = "2.8.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "requests" },
+    { name = "tqdm" },
+]
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/19/92/bad46a9bc5b993727045d09ce35e2dcc3939be02f47acfc99b2be0d33b33/gpt4all-2.8.2-py3-none-macosx_10_15_universal2.whl", hash = "sha256:41d6de60fe1f9c9a29bcbb585c5eb39083893cf00db0b836de1f2d88e2fbbb17", size = 6622150, upload-time = "2024-08-14T18:21:13.648Z" },
+    { url = "https://files.pythonhosted.org/packages/93/60/ef1efd83c5757a69e8ed842b8a12b091e94a9bb2ceacc8b6e1c2e6487a77/gpt4all-2.8.2-py3-none-manylinux1_x86_64.whl", hash = "sha256:c61e977afa72475c076211fd9b59a88334fc0062615be8c2f7716363a21fbafa", size = 121614072, upload-time = "2024-08-14T18:21:21.736Z" },
+    { url = "https://files.pythonhosted.org/packages/04/92/dd9dd077f0fc61218e4116a7154958eff36f06893506ad3290802218b1c9/gpt4all-2.8.2-py3-none-win_amd64.whl", hash = "sha256:a164674943df732808266e5bf63332fadef95eac802c201b47c7b378e5bd9f45", size = 119593619, upload-time = "2024-08-14T18:21:31.375Z" },
+]
+
+[[package]]
 name = "grpcio"
 version = "1.76.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1671,6 +1685,11 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/e0/be/921193a31e7714de7de89d66a4a26cfa7620404307caf3d808989107b271/nomic-3.9.0.tar.gz", hash = "sha256:5be6b2e39ea07cf9db386b663dac792ff6a3d91beccef8eb18820b517cd6c0b6", size = 61325, upload-time = "2025-11-11T05:15:08.028Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/1d/6b/93dac7e44912f5b937f13ecbe92d126239c1eab368d60e1852629687aa35/nomic-3.9.0-py3-none-any.whl", hash = "sha256:a8a44d459d265e958f35d6b0e0210b47b0447d218f1e897f979ab76f77cf020d", size = 56309, upload-time = "2025-11-11T05:15:06.548Z" },
+]
+
+[package.optional-dependencies]
+local = [
+    { name = "gpt4all" },
 ]
 
 [[package]]
@@ -3517,6 +3536,7 @@ dependencies = [
     { name = "langchain-text-splitters" },
     { name = "langfuse" },
     { name = "mcp-refcache" },
+    { name = "nomic", extra = ["local"] },
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "typer" },
@@ -3543,6 +3563,7 @@ requires-dist = [
     { name = "langchain-text-splitters", specifier = ">=1.1.0" },
     { name = "langfuse", specifier = ">=3.10.0" },
     { name = "mcp-refcache", specifier = ">=0.1.0" },
+    { name = "nomic", extras = ["local"], specifier = ">=3.9.0" },
     { name = "pydantic", specifier = ">=2.10.0" },
     { name = "pydantic-settings", specifier = ">=2.10.0" },
     { name = "typer", specifier = ">=0.15.0" },
