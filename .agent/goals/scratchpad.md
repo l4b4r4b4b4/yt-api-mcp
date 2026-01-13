@@ -9,9 +9,9 @@
 | ID | Goal Name | Status | Priority | Last Updated |
 |----|-----------|--------|----------|--------------|
 | 01 | [Production YouTube MCP MVP](./01-Production-YouTube-MCP-MVP/scratchpad.md) | 🟠 Implemented | Critical | 2025-01-11 |
-| 02 | [Semantic Transcript Search](./02-Semantic-Transcript-Search/scratchpad.md) | 🟡 In Progress | High | 2025-01-13 |
+| 02 | [Semantic Transcript Search](./02-Semantic-Transcript-Search/scratchpad.md) | 🟢 Complete | High | 2025-01-14 |
 | 03 | [Context Limit Research](./03-Context-Limit-Research/scratchpad.md) | 🟡 In Progress | Low | 2025-01-13 |
-| 04 | (Reserved) | ⚪ Not Started | - | - |
+| 04 | [Semantic Search Comments & Mixed](./04-Semantic-Search-Comments-Mixed/scratchpad.md) | 🟢 Complete | High | 2025-01-15 |
 | 05 | (Reserved) | ⚪ Not Started | - | - |
 | 06 | (Reserved) | ⚪ Not Started | - | - |
 | 07 | (Reserved) | ⚪ Not Started | - | - |
@@ -57,6 +57,26 @@
 ---
 
 ## Recent Activity
+
+### 2025-01-15
+- **Goal 04 Complete**: Semantic Search for Comments & Mixed Content
+  - All 5 new MCP tools validated live:
+    - `semantic_search_comments` - search comments with auto-indexing
+    - `semantic_search_all` - unified transcript + comment search
+    - `get_indexed_videos` - list indexed video IDs with filters
+    - `delete_indexed_video` - remove content from index
+  - 406 tests passing, 104 new tests for this goal
+  - Ready for v0.0.3 release
+
+### 2025-01-14
+- **Goal 02 Complete**: Semantic Transcript Search v0.0.2 released
+  - PR #1 merged, published to PyPI
+  - 343 tests passing, semantic search validated live
+- **Goal 04 Created**: Semantic Search for Comments & Mixed Content
+  - Extend semantic search to YouTube comments
+  - Add unified search across transcripts + comments
+  - Add utility tools (get_indexed_videos, delete_indexed_video)
+  - Target version: 0.0.3
 
 ### 2025-01-13
 - **Goal 03 Created**: Context Limit Research

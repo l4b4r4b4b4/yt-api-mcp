@@ -70,7 +70,11 @@ Live Streaming Tools:
 Semantic Search Tools:
 - warmup_semantic_search: Pre-load embedding model (~270MB download on first run) - call before first search
 - semantic_search_transcripts: Search transcripts with natural language (auto-indexes missing videos)
+- semantic_search_comments: Search comments with natural language (auto-indexes missing videos)
+- semantic_search_all: Unified search across transcripts AND comments
 - index_channel_transcripts: Pre-index all transcripts from a channel (optional, for warming cache)
+- get_indexed_videos: List videos that have been indexed for semantic search
+- delete_indexed_video: Remove a video from the semantic search index
 
 Cache Management:
 - get_cached_result: Retrieve or paginate through cached results
@@ -115,12 +119,17 @@ Live Streaming Notes:
 Semantic Search Notes:
 - FIRST TIME: Call warmup_semantic_search to download the embedding model (~270MB, 30-60s)
 - semantic_search_transcripts is the primary tool - just search, it handles indexing automatically
+- semantic_search_comments works the same way for YouTube comments
+- semantic_search_all searches BOTH transcripts and comments in one query
 - First search on new content is slower (1-2 min for 50 videos) due to indexing
 - Subsequent searches are fast (content already indexed in vector database)
 - Supports searching multiple channels and/or specific videos in one query
-- Returns timestamped URLs for direct playback at matching segments
+- Transcript results include timestamp URLs for direct playback
+- Comment results include author, like_count, reply_count
 - Uses Nomic Matryoshka embeddings with ChromaDB vector store
 - Indexing uses ~1 API quota unit per video (transcripts themselves are free)
+- Use get_indexed_videos to see what's been indexed
+- Use delete_indexed_video to remove content and re-index if needed
 
 {cache_instructions()}
 """,
@@ -803,6 +812,182 @@ async def index_channel_transcripts(
         max_videos=max_videos,
         language=language,
         force_reindex=force_reindex,
+    )
+
+
+@mcp.tool
+async def semantic_search_comments(
+    query: str,
+    channel_ids: list[str] | None = None,
+    video_ids: list[str] | None = None,
+    k: int = 10,
+    max_comments_per_video: int = 100,
+    max_videos_per_channel: int = 50,
+    min_score: float | None = None,
+) -> dict[str, Any]:
+    """Search comments using natural language with automatic indexing.
+
+    Performs semantic similarity search over video comments. Automatically
+    indexes any missing comments before searching, providing a seamless
+    experience without requiring explicit indexing calls.
+
+    Args:
+        query: Natural language search query (e.g., "questions about flakes").
+        channel_ids: Optional list of YouTube channel IDs to scope the search.
+        video_ids: Optional list of specific video IDs to scope the search.
+        k: Number of results to return (default: 10).
+        max_comments_per_video: Maximum comments to index per video (default: 100).
+        max_videos_per_channel: Maximum videos to fetch per channel (default: 50).
+        min_score: Optional minimum similarity score threshold (lower is better).
+
+    Returns:
+        Dictionary with search results including:
+        - query: The original search query
+        - results: List of matches with video info, text, author, like_count, scores
+        - total_results: Number of results returned
+        - indexing_stats: Statistics about auto-indexing performed
+        - scope: Description of search scope applied
+
+    Note:
+        - First search on new content will be slower due to indexing
+        - Subsequent searches are fast (already indexed)
+        - If neither channel_ids nor video_ids provided, searches all indexed comments
+    """
+    from app.tools.youtube.semantic.tools import (
+        semantic_search_comments as semantic_search_comments_impl,
+    )
+
+    return await semantic_search_comments_impl(
+        query=query,
+        channel_ids=channel_ids,
+        video_ids=video_ids,
+        k=k,
+        max_comments_per_video=max_comments_per_video,
+        max_videos_per_channel=max_videos_per_channel,
+        min_score=min_score,
+    )
+
+
+@mcp.tool
+async def semantic_search_all(
+    query: str,
+    content_types: list[str] | None = None,
+    channel_ids: list[str] | None = None,
+    video_ids: list[str] | None = None,
+    k: int = 10,
+    language: str = "en",
+    max_comments_per_video: int = 100,
+    max_videos_per_channel: int = 50,
+    min_score: float | None = None,
+) -> dict[str, Any]:
+    """Search across all content types (transcripts and comments).
+
+    Performs unified semantic search over both video transcripts and comments.
+    Automatically indexes any missing content before searching.
+
+    Args:
+        query: Natural language search query (e.g., "Nix garbage collection").
+        content_types: List of content types to search: ["transcript", "comment"].
+            If None, searches all types.
+        channel_ids: Optional list of YouTube channel IDs to scope the search.
+        video_ids: Optional list of specific video IDs to scope the search.
+        k: Number of results to return (default: 10).
+        language: Preferred transcript language code (default: "en").
+        max_comments_per_video: Maximum comments to index per video (default: 100).
+        max_videos_per_channel: Maximum videos to fetch per channel (default: 50).
+        min_score: Optional minimum similarity score threshold (lower is better).
+
+    Returns:
+        Dictionary with search results including:
+        - query: The original search query
+        - results: List of matches with content_type field indicating source
+        - total_results: Number of results returned
+        - indexing_stats: Statistics for both transcripts and comments
+        - content_types_searched: List of content types that were searched
+
+    Note:
+        - Results are sorted by relevance score across all content types
+        - Each result includes content_type field ("transcript" or "comment")
+        - Transcript results include timestamp_url, comment results include author
+    """
+    from app.tools.youtube.semantic.tools import (
+        semantic_search_all as semantic_search_all_impl,
+    )
+
+    return await semantic_search_all_impl(
+        query=query,
+        content_types=content_types,
+        channel_ids=channel_ids,
+        video_ids=video_ids,
+        k=k,
+        language=language,
+        max_comments_per_video=max_comments_per_video,
+        max_videos_per_channel=max_videos_per_channel,
+        min_score=min_score,
+    )
+
+
+@mcp.tool
+async def get_indexed_videos(
+    channel_id: str | None = None,
+    content_type: str | None = None,
+) -> dict[str, Any]:
+    """Get list of videos that have been indexed for semantic search.
+
+    Retrieves all indexed video IDs with optional filtering by channel
+    and/or content type. Useful for understanding what content is available.
+
+    Args:
+        channel_id: Optional filter by YouTube channel ID.
+        content_type: Optional filter by content type ("transcript" or "comment").
+
+    Returns:
+        Dictionary with:
+        - video_ids: List of indexed video IDs
+        - total_count: Total number of indexed videos
+        - channel_filter: Channel ID filter if applied
+        - content_type_filter: Content type filter if applied
+    """
+    from app.tools.youtube.semantic.tools import (
+        get_indexed_videos as get_indexed_videos_impl,
+    )
+
+    return await get_indexed_videos_impl(
+        channel_id=channel_id,
+        content_type=content_type,
+    )
+
+
+@mcp.tool
+async def delete_indexed_video(
+    video_id: str,
+    content_type: str | None = None,
+) -> dict[str, Any]:
+    """Delete a video's content from the semantic search index.
+
+    Removes indexed content (transcripts, comments, or both) for a specific
+    video. Useful for re-indexing or cleaning up the index.
+
+    Args:
+        video_id: YouTube video ID to remove from the index.
+        content_type: Optional content type to delete ("transcript" or "comment").
+            If None, deletes all content types for the video.
+
+    Returns:
+        Dictionary with:
+        - video_id: The deleted video ID
+        - transcripts_deleted: Number of transcript chunks removed
+        - comments_deleted: Number of comment chunks removed
+        - total_deleted: Total chunks removed
+        - success: Whether the deletion was successful
+    """
+    from app.tools.youtube.semantic.tools import (
+        delete_indexed_video as delete_indexed_video_impl,
+    )
+
+    return await delete_indexed_video_impl(
+        video_id=video_id,
+        content_type=content_type,
     )
 
 

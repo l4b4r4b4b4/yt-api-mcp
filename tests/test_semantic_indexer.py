@@ -84,6 +84,18 @@ def mock_vector_store() -> MagicMock:
     # Mock the underlying collection
     collection = MagicMock()
 
+    def _matches_filter(metadata: dict[str, Any], where: dict[str, Any]) -> bool:
+        """Check if metadata matches a where filter (supports $and)."""
+        if not where:
+            return True
+
+        # Handle $and operator
+        if "$and" in where:
+            return all(_matches_filter(metadata, sub) for sub in where["$and"])
+
+        # Simple key-value matching
+        return all(metadata.get(key) == value for key, value in where.items())
+
     def mock_get(
         where: dict[str, Any] | None = None,
         limit: int | None = None,
@@ -93,18 +105,14 @@ def mock_vector_store() -> MagicMock:
         results: dict[str, Any] = {"ids": [], "metadatas": []}
 
         for doc_id, doc_data in storage.items():
+            metadata = doc_data.get("metadata", {})
             # Apply where filter
-            if where:
-                match = all(
-                    doc_data.get("metadata", {}).get(key) == value
-                    for key, value in where.items()
-                )
-                if not match:
-                    continue
+            if where and not _matches_filter(metadata, where):
+                continue
 
             results["ids"].append(doc_id)
             if include is None or "metadatas" in include:
-                results["metadatas"].append(doc_data.get("metadata", {}))
+                results["metadatas"].append(metadata)
 
             # Apply limit
             if limit and len(results["ids"]) >= limit:
@@ -119,11 +127,8 @@ def mock_vector_store() -> MagicMock:
 
         to_delete = []
         for doc_id, doc_data in storage.items():
-            match = all(
-                doc_data.get("metadata", {}).get(key) == value
-                for key, value in where.items()
-            )
-            if match:
+            metadata = doc_data.get("metadata", {})
+            if _matches_filter(metadata, where):
                 to_delete.append(doc_id)
 
         for doc_id in to_delete:
@@ -1063,3 +1068,297 @@ class TestIndexerIntegration:
             # 7. No longer indexed
             assert indexer.is_video_indexed(video_id) is False
             assert indexer.get_chunk_count() == 0
+
+
+class TestIsVideoCommentsIndexed:
+    """Tests for the is_video_comments_indexed method."""
+
+    def test_comments_indexed_returns_true(
+        self,
+        indexer: TranscriptIndexer,
+        mock_vector_store: MagicMock,
+    ) -> None:
+        """Test returns True when video has comment chunks in store."""
+        # Add comment chunks for a video
+        mock_vector_store._storage["comment1"] = {
+            "content": "Great video!",
+            "metadata": {"video_id": "test_video", "content_type": "comment"},
+        }
+
+        assert indexer.is_video_comments_indexed("test_video") is True
+
+    def test_comments_not_indexed_returns_false(
+        self,
+        indexer: TranscriptIndexer,
+        mock_vector_store: MagicMock,
+    ) -> None:
+        """Test returns False when video has no comment chunks."""
+        # Add transcript chunks but no comments
+        mock_vector_store._storage["transcript1"] = {
+            "content": "Transcript text",
+            "metadata": {"video_id": "test_video", "content_type": "transcript"},
+        }
+
+        assert indexer.is_video_comments_indexed("test_video") is False
+
+    def test_empty_store_returns_false(
+        self,
+        indexer: TranscriptIndexer,
+        mock_vector_store: MagicMock,
+    ) -> None:
+        """Test returns False for empty store."""
+        assert indexer.is_video_comments_indexed("any_video") is False
+
+
+class TestIndexVideoComments:
+    """Tests for the index_video_comments method."""
+
+    @pytest.fixture
+    def sample_comments(self) -> dict[str, Any]:
+        """Sample comments response."""
+        return {
+            "video_id": "test_video_1",
+            "comments": [
+                {
+                    "text": "Great explanation!",
+                    "author": "User1",
+                    "like_count": 42,
+                    "reply_count": 3,
+                    "published_at": "2024-06-15T10:00:00Z",
+                },
+                {
+                    "text": "Very helpful, thanks!",
+                    "author": "User2",
+                    "like_count": 15,
+                    "reply_count": 0,
+                    "published_at": "2024-06-16T12:30:00Z",
+                },
+                {
+                    "text": "Can you do more videos like this?",
+                    "author": "User3",
+                    "like_count": 8,
+                    "reply_count": 1,
+                    "published_at": "2024-06-17T09:15:00Z",
+                },
+            ],
+            "total_returned": 3,
+        }
+
+    @pytest.mark.asyncio
+    async def test_index_video_comments_creates_chunks(
+        self,
+        indexer: TranscriptIndexer,
+        mock_vector_store: MagicMock,
+        sample_comments: dict[str, Any],
+        sample_video_details: dict[str, Any],
+    ) -> None:
+        """Test that indexing comments creates chunks."""
+        with (
+            patch("app.tools.youtube.metadata.get_video_details") as mock_details,
+            patch("app.tools.youtube.comments.get_video_comments") as mock_comments,
+        ):
+            mock_details.return_value = sample_video_details
+            mock_comments.return_value = sample_comments
+
+            result = await indexer.index_video_comments("test_video_1")
+
+            assert result.indexed_count == 1
+            assert result.chunk_count == 3  # One chunk per comment
+            assert result.error_count == 0
+            assert "test_video_1" in result.video_ids
+
+    @pytest.mark.asyncio
+    async def test_index_video_comments_no_comments(
+        self,
+        indexer: TranscriptIndexer,
+        mock_vector_store: MagicMock,
+        sample_video_details: dict[str, Any],
+    ) -> None:
+        """Test handling when video has no comments."""
+        with (
+            patch("app.tools.youtube.metadata.get_video_details") as mock_details,
+            patch("app.tools.youtube.comments.get_video_comments") as mock_comments,
+        ):
+            mock_details.return_value = sample_video_details
+            mock_comments.return_value = {"video_id": "test_video_1", "comments": []}
+
+            result = await indexer.index_video_comments("test_video_1")
+
+            assert result.indexed_count == 0
+            assert result.skipped_count == 1
+            assert result.chunk_count == 0
+
+    @pytest.mark.asyncio
+    async def test_index_video_comments_skips_if_indexed(
+        self,
+        indexer: TranscriptIndexer,
+        mock_vector_store: MagicMock,
+        sample_video_details: dict[str, Any],
+    ) -> None:
+        """Test that already indexed comments are skipped."""
+        # Add existing comment chunks
+        mock_vector_store._storage["comment1"] = {
+            "content": "Existing comment",
+            "metadata": {"video_id": "test_video_1", "content_type": "comment"},
+        }
+
+        with patch("app.tools.youtube.metadata.get_video_details") as mock_details:
+            mock_details.return_value = sample_video_details
+
+            result = await indexer.index_video_comments("test_video_1")
+
+            assert result.skipped_count == 1
+            assert result.indexed_count == 0
+
+    @pytest.mark.asyncio
+    async def test_index_video_comments_force_reindex(
+        self,
+        indexer: TranscriptIndexer,
+        mock_vector_store: MagicMock,
+        sample_comments: dict[str, Any],
+        sample_video_details: dict[str, Any],
+    ) -> None:
+        """Test force_reindex deletes existing and re-indexes."""
+        # Add existing comment chunks
+        mock_vector_store._storage["comment1"] = {
+            "content": "Old comment",
+            "metadata": {"video_id": "test_video_1", "content_type": "comment"},
+        }
+
+        with (
+            patch("app.tools.youtube.metadata.get_video_details") as mock_details,
+            patch("app.tools.youtube.comments.get_video_comments") as mock_comments,
+        ):
+            mock_details.return_value = sample_video_details
+            mock_comments.return_value = sample_comments
+
+            result = await indexer.index_video_comments(
+                "test_video_1", force_reindex=True
+            )
+
+            assert result.indexed_count == 1
+            assert result.chunk_count == 3
+
+
+class TestDeleteVideoComments:
+    """Tests for the delete_video_comments method."""
+
+    @pytest.mark.asyncio
+    async def test_delete_video_comments_removes_only_comments(
+        self,
+        indexer: TranscriptIndexer,
+        mock_vector_store: MagicMock,
+    ) -> None:
+        """Test that only comment chunks are deleted, not transcripts."""
+        # Add both transcript and comment chunks
+        mock_vector_store._storage["transcript1"] = {
+            "content": "Transcript text",
+            "metadata": {"video_id": "test_video", "content_type": "transcript"},
+        }
+        mock_vector_store._storage["comment1"] = {
+            "content": "Comment 1",
+            "metadata": {"video_id": "test_video", "content_type": "comment"},
+        }
+        mock_vector_store._storage["comment2"] = {
+            "content": "Comment 2",
+            "metadata": {"video_id": "test_video", "content_type": "comment"},
+        }
+
+        deleted = await indexer.delete_video_comments("test_video")
+
+        assert deleted == 2
+        # Transcript should still exist
+        assert "transcript1" in mock_vector_store._storage
+
+    @pytest.mark.asyncio
+    async def test_delete_video_comments_returns_zero_for_no_comments(
+        self,
+        indexer: TranscriptIndexer,
+        mock_vector_store: MagicMock,
+    ) -> None:
+        """Test returns 0 when video has no comments."""
+        deleted = await indexer.delete_video_comments("nonexistent_video")
+
+        assert deleted == 0
+
+
+class TestGetIndexedVideoIdsByContentType:
+    """Tests for the get_indexed_video_ids_by_content_type method."""
+
+    @pytest.mark.asyncio
+    async def test_filters_by_content_type(
+        self,
+        indexer: TranscriptIndexer,
+        mock_vector_store: MagicMock,
+    ) -> None:
+        """Test filtering by content_type."""
+        # Add mixed content
+        mock_vector_store._storage["t1"] = {
+            "content": "Transcript",
+            "metadata": {"video_id": "video_1", "content_type": "transcript"},
+        }
+        mock_vector_store._storage["c1"] = {
+            "content": "Comment",
+            "metadata": {"video_id": "video_2", "content_type": "comment"},
+        }
+        mock_vector_store._storage["c2"] = {
+            "content": "Another comment",
+            "metadata": {"video_id": "video_3", "content_type": "comment"},
+        }
+
+        # Get only comment videos
+        comment_videos = await indexer.get_indexed_video_ids_by_content_type(
+            content_type="comment"
+        )
+
+        assert set(comment_videos) == {"video_2", "video_3"}
+
+    @pytest.mark.asyncio
+    async def test_filters_by_channel_and_content_type(
+        self,
+        indexer: TranscriptIndexer,
+        mock_vector_store: MagicMock,
+    ) -> None:
+        """Test filtering by both channel and content_type."""
+        mock_vector_store._storage["c1"] = {
+            "content": "Comment",
+            "metadata": {
+                "video_id": "video_1",
+                "content_type": "comment",
+                "channel_id": "channel_a",
+            },
+        }
+        mock_vector_store._storage["c2"] = {
+            "content": "Comment",
+            "metadata": {
+                "video_id": "video_2",
+                "content_type": "comment",
+                "channel_id": "channel_b",
+            },
+        }
+
+        videos = await indexer.get_indexed_video_ids_by_content_type(
+            content_type="comment", channel_id="channel_a"
+        )
+
+        assert videos == ["video_1"]
+
+    @pytest.mark.asyncio
+    async def test_returns_all_when_no_filter(
+        self,
+        indexer: TranscriptIndexer,
+        mock_vector_store: MagicMock,
+    ) -> None:
+        """Test returns all videos when no filter provided."""
+        mock_vector_store._storage["t1"] = {
+            "content": "Transcript",
+            "metadata": {"video_id": "video_1", "content_type": "transcript"},
+        }
+        mock_vector_store._storage["c1"] = {
+            "content": "Comment",
+            "metadata": {"video_id": "video_2", "content_type": "comment"},
+        }
+
+        all_videos = await indexer.get_indexed_video_ids_by_content_type()
+
+        assert set(all_videos) == {"video_1", "video_2"}

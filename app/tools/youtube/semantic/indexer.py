@@ -37,6 +37,7 @@ if TYPE_CHECKING:
     from langchain_chroma import Chroma
 
     from app.tools.youtube.semantic.chunker import TranscriptChunker
+    from app.tools.youtube.semantic.comment_chunker import CommentChunker
 
 logger = logging.getLogger(__name__)
 
@@ -116,29 +117,40 @@ class IndexingResult:
 
 
 class TranscriptIndexer:
-    """Indexes YouTube video transcripts into a vector store.
+    """Indexes YouTube video transcripts and comments into a vector store.
 
-    Coordinates transcript fetching, chunking, and vector store insertion
-    for batch indexing operations.
+    Coordinates content fetching, chunking, and vector store insertion
+    for batch indexing operations. Supports both transcripts and comments
+    with distinct content_type metadata for filtering.
 
     Attributes:
         vector_store: ChromaDB vector store for storing embeddings.
         chunker: Transcript chunker for creating chunks with metadata.
+        comment_chunker: Comment chunker for creating comment documents.
     """
 
     def __init__(
         self,
         vector_store: Chroma,
         chunker: TranscriptChunker,
+        comment_chunker: CommentChunker | None = None,
     ) -> None:
         """Initialize the transcript indexer.
 
         Args:
             vector_store: ChromaDB vector store instance.
             chunker: TranscriptChunker instance for chunking transcripts.
+            comment_chunker: Optional CommentChunker instance. If None, creates one.
         """
         self.vector_store = vector_store
         self.chunker = chunker
+
+        # Lazy import to avoid circular imports
+        if comment_chunker is None:
+            from app.tools.youtube.semantic.comment_chunker import CommentChunker
+
+            comment_chunker = CommentChunker()
+        self.comment_chunker = comment_chunker
 
     async def index_channel(
         self,
@@ -513,6 +525,271 @@ class TranscriptIndexer:
         except Exception as e:
             logger.error(f"Error getting chunk count: {e!s}")
             return 0
+
+    def is_video_comments_indexed(self, video_id: str) -> bool:
+        """Check if a video's comments are already indexed in the vector store.
+
+        Args:
+            video_id: YouTube video ID to check.
+
+        Returns:
+            True if the video has comment chunks in the vector store.
+
+        Example:
+            >>> if not indexer.is_video_comments_indexed("dQw4w9WgXcQ"):
+            ...     await indexer.index_video_comments("dQw4w9WgXcQ")
+        """
+        try:
+            collection = self.vector_store._collection
+
+            # Query for documents with this video_id AND content_type="comment"
+            results = collection.get(
+                where={
+                    "$and": [
+                        {"video_id": video_id},
+                        {"content_type": "comment"},
+                    ]
+                },
+                limit=1,
+                include=[],
+            )
+
+            has_comments = bool(results.get("ids"))
+            logger.debug(f"Video {video_id} comments indexed: {has_comments}")
+            return has_comments
+
+        except Exception as e:
+            logger.warning(
+                f"Error checking if video {video_id} comments are indexed: {e!s}"
+            )
+            return False
+
+    async def index_video_comments(
+        self,
+        video_id: str,
+        max_comments: int = 100,
+        force_reindex: bool = False,
+        channel_id: str | None = None,
+        video_info: dict[str, Any] | None = None,
+    ) -> IndexingResult:
+        """Index comments from a single video.
+
+        Args:
+            video_id: YouTube video ID to index comments from.
+            max_comments: Maximum number of comments to fetch (default: 100).
+            force_reindex: If True, re-index even if already indexed.
+            channel_id: Optional channel ID (avoids extra API call if known).
+            video_info: Optional video metadata (avoids extra API call if known).
+
+        Returns:
+            IndexingResult for the comment indexing operation.
+
+        Example:
+            >>> result = await indexer.index_video_comments("dQw4w9WgXcQ")
+            >>> print(f"Indexed {result.chunk_count} comments")
+        """
+        from app.tools.youtube.comments import get_video_comments
+        from app.tools.youtube.metadata import get_video_details
+
+        result = IndexingResult()
+
+        logger.debug(
+            f"Indexing comments: video_id={video_id}, max_comments={max_comments}"
+        )
+
+        # Check if already indexed (unless force_reindex)
+        if not force_reindex and self.is_video_comments_indexed(video_id):
+            logger.debug(f"Video {video_id} comments already indexed, skipping")
+            result.skipped_count = 1
+            return result
+
+        # If force_reindex, delete existing comment chunks first
+        if force_reindex:
+            deleted = await self.delete_video_comments(video_id)
+            if deleted > 0:
+                logger.debug(
+                    f"Deleted {deleted} existing comment chunks for video {video_id}"
+                )
+
+        # Get video metadata if not provided
+        if video_info is None:
+            try:
+                video_info = await get_video_details(video_id)
+            except Exception as e:
+                error_msg = f"[{video_id}] Failed to get video details: {e!s}"
+                logger.warning(error_msg)
+                result.errors.append(error_msg)
+                result.error_count = 1
+                return result
+
+        # Get comments
+        try:
+            comments_data = await get_video_comments(video_id, max_results=max_comments)
+            comments = comments_data.get("comments", [])
+        except Exception as e:
+            error_msg = f"[{video_id}] Failed to get comments: {e!s}"
+            logger.warning(error_msg)
+            result.errors.append(error_msg)
+            result.error_count = 1
+            return result
+
+        if not comments:
+            logger.debug(f"[{video_id}] No comments available")
+            result.skipped_count = 1
+            return result
+
+        # Build video metadata for chunks
+        video_metadata = {
+            "video_id": video_id,
+            "video_title": video_info.get("title", ""),
+            "channel_id": channel_id or video_info.get("channel_id", ""),
+            "channel_title": video_info.get("channel_title", ""),
+            "video_url": video_info.get(
+                "url", f"https://www.youtube.com/watch?v={video_id}"
+            ),
+        }
+
+        # Create Documents from comments
+        try:
+            documents = self.comment_chunker.chunk_comments(
+                comments=comments,
+                video_metadata=video_metadata,
+            )
+        except Exception as e:
+            error_msg = f"[{video_id}] Failed to chunk comments: {e!s}"
+            logger.error(error_msg)
+            result.errors.append(error_msg)
+            result.error_count = 1
+            return result
+
+        if not documents:
+            logger.debug(f"[{video_id}] No documents created from comments")
+            result.skipped_count = 1
+            return result
+
+        # Add to vector store
+        try:
+            self.vector_store.add_documents(documents)
+            logger.debug(f"Added {len(documents)} comment chunks for video {video_id}")
+        except Exception as e:
+            error_msg = f"[{video_id}] Failed to add comments to vector store: {e!s}"
+            logger.error(error_msg)
+            result.errors.append(error_msg)
+            result.error_count = 1
+            return result
+
+        # Success
+        result.indexed_count = 1
+        result.chunk_count = len(documents)
+        result.video_ids.append(video_id)
+
+        logger.info(f"Indexed video {video_id} comments: {len(documents)} chunks")
+
+        return result
+
+    async def delete_video_comments(self, video_id: str) -> int:
+        """Delete all comment chunks for a video from the vector store.
+
+        Args:
+            video_id: YouTube video ID whose comments to delete.
+
+        Returns:
+            Number of comment chunks deleted.
+
+        Example:
+            >>> deleted = await indexer.delete_video_comments("dQw4w9WgXcQ")
+            >>> print(f"Deleted {deleted} comment chunks")
+        """
+        try:
+            collection = self.vector_store._collection
+
+            # Count existing comment chunks
+            existing = collection.get(
+                where={
+                    "$and": [
+                        {"video_id": video_id},
+                        {"content_type": "comment"},
+                    ]
+                },
+                include=[],
+            )
+            chunk_count = len(existing.get("ids", []))
+
+            if chunk_count == 0:
+                logger.debug(f"No comment chunks to delete for video {video_id}")
+                return 0
+
+            # Delete all comment chunks with this video_id
+            collection.delete(
+                where={
+                    "$and": [
+                        {"video_id": video_id},
+                        {"content_type": "comment"},
+                    ]
+                }
+            )
+
+            logger.info(f"Deleted {chunk_count} comment chunks for video {video_id}")
+            return chunk_count
+
+        except Exception as e:
+            logger.error(f"Error deleting video {video_id} comment chunks: {e!s}")
+            return 0
+
+    async def get_indexed_video_ids_by_content_type(
+        self,
+        content_type: str | None = None,
+        channel_id: str | None = None,
+    ) -> list[str]:
+        """Get list of video IDs indexed for a specific content type.
+
+        Args:
+            content_type: Filter by content type ("transcript" or "comment").
+                If None, returns all indexed videos regardless of type.
+            channel_id: Optional filter by channel ID.
+
+        Returns:
+            List of unique video IDs in the index.
+
+        Example:
+            >>> comment_videos = await indexer.get_indexed_video_ids_by_content_type(
+            ...     content_type="comment"
+            ... )
+        """
+        try:
+            collection = self.vector_store._collection
+
+            # Build where filter
+            filters = []
+            if content_type:
+                filters.append({"content_type": content_type})
+            if channel_id:
+                filters.append({"channel_id": channel_id})
+
+            if len(filters) > 1:
+                where_filter = {"$and": filters}
+            elif len(filters) == 1:
+                where_filter = filters[0]
+            else:
+                where_filter = None
+
+            # Get all documents (just metadata)
+            results = collection.get(
+                where=where_filter,
+                include=["metadatas"],
+            )
+
+            # Extract unique video IDs
+            video_ids = set()
+            for metadata in results.get("metadatas", []):
+                if metadata and "video_id" in metadata:
+                    video_ids.add(metadata["video_id"])
+
+            return sorted(video_ids)
+
+        except Exception as e:
+            logger.error(f"Error getting indexed video IDs: {e!s}")
+            return []
 
 
 __all__ = [

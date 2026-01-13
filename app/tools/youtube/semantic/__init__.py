@@ -24,6 +24,7 @@ Example:
 """
 
 from app.tools.youtube.semantic.chunker import TranscriptChunker
+from app.tools.youtube.semantic.comment_chunker import CommentChunker
 from app.tools.youtube.semantic.config import (
     SemanticSearchConfig,
     get_semantic_config,
@@ -39,13 +40,18 @@ from app.tools.youtube.semantic.tokenizers import (
     create_tokenizer,
 )
 from app.tools.youtube.semantic.tools import (
+    delete_indexed_video,
+    get_indexed_videos,
     get_indexer,
     index_channel_transcripts,
     index_video_transcript,
+    semantic_search_all,
+    semantic_search_comments,
     semantic_search_transcripts,
 )
 
 __all__ = [
+    "CommentChunker",
     "HuggingFaceTokenizer",
     "IndexingResult",
     "SemanticSearchConfig",
@@ -56,12 +62,16 @@ __all__ = [
     "create_embeddings",
     "create_tokenizer",
     "create_vector_store",
+    "delete_indexed_video",
     "get_embeddings",
+    "get_indexed_videos",
     "get_indexer",
     "get_semantic_config",
     "get_vector_store",
     "index_channel_transcripts",
     "index_video_transcript",
     "semantic_config",
+    "semantic_search_all",
+    "semantic_search_comments",
     "semantic_search_transcripts",
 ]

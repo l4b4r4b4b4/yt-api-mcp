@@ -17,6 +17,91 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.3] - 2025-01-15
+
+### Added
+
+#### Semantic Comment Search (2 new tools)
+- `semantic_search_comments` - Search comments using natural language
+  - **Auto-indexing**: Automatically indexes video comments before searching
+  - Supports `channel_ids` and/or `video_ids` for flexible scoping
+  - Returns author, like_count, reply_count with each result
+  - Includes similarity scores and indexing statistics
+  - Example: "find comments discussing flake configuration issues"
+
+- `semantic_search_all` - Unified search across transcripts AND comments
+  - Search both content types in a single query
+  - Optional `content_types` parameter to filter (e.g., `["transcript"]` only)
+  - Results include `content_type` field ("transcript" or "comment")
+  - Transcript results include timestamp URLs; comment results include author
+  - Combined indexing stats for both content types
+
+#### Index Management Utilities (2 new tools)
+- `get_indexed_videos` - List videos in the semantic search index
+  - Optional `channel_id` filter to scope by channel
+  - Optional `content_type` filter ("transcript" or "comment")
+  - Returns video IDs and total count
+
+- `delete_indexed_video` - Remove content from the semantic search index
+  - Delete by video ID
+  - Optional `content_type` to delete only transcripts or comments
+  - Returns count of deleted chunks by type
+
+#### Infrastructure Improvements
+- Added `content_type` metadata field to all indexed documents
+  - Enables filtering by content type in ChromaDB queries
+  - Values: `"transcript"` or `"comment"`
+- New `CommentChunker` class for processing YouTube comments
+  - One Document per comment (no chunking needed for short content)
+  - Preserves author attribution and engagement metrics
+- Extended `TranscriptIndexer` with comment indexing methods
+  - `index_video_comments()` - Index comments from a video
+  - `is_video_comments_indexed()` - Check if comments are indexed
+  - `delete_video_comments()` - Remove comment index for a video
+
+### Changed
+- Server instructions updated with new tool documentation
+- Test count increased from 334 to 406 tests (104 new tests)
+- Code coverage maintained at 73%+
+
+### Technical Details
+
+#### New Module
+```
+app/tools/youtube/semantic/
+└── comment_chunker.py   # CommentChunker class
+```
+
+#### Comment Metadata Schema
+```python
+{
+    "content_type": "comment",
+    "video_id": str,
+    "channel_id": str,
+    "channel_title": str,
+    "video_title": str,
+    "video_url": str,
+    "published_at": str,      # When comment was posted
+    "author": str,            # Comment author display name
+    "like_count": int,        # Engagement metric
+    "reply_count": int,       # Number of replies
+    "chunk_index": int,       # Position in comment list
+}
+```
+
+#### API Quota for Comments
+- `get_video_comments`: 1 quota unit per call (max 100 comments)
+- For 50 videos × 100 comments = 50 quota units
+- Well within 10,000 daily limit
+
+### Known Limitations
+- Existing indexed transcripts (from v0.0.2) lack `content_type` metadata
+  - They won't appear when filtering by content_type
+  - Re-indexing will add the field automatically
+- YouTube may rate-limit transcript fetching from cloud IPs
+
+---
+
 ## [0.0.2] - 2025-01-14
 
 ### Added
