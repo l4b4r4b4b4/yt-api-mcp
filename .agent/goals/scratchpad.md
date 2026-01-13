@@ -8,8 +8,8 @@
 
 | ID | Goal Name | Status | Priority | Last Updated |
 |----|-----------|--------|----------|--------------|
-| 01 | [Production YouTube MCP MVP](./01-Production-YouTube-MCP-MVP/scratchpad.md) | 🟡 In Progress | Critical | 2025-01-08 |
-| 02 | (Reserved) | ⚪ Not Started | - | - |
+| 01 | [Production YouTube MCP MVP](./01-Production-YouTube-MCP-MVP/scratchpad.md) | 🟠 Implemented | Critical | 2025-01-11 |
+| 02 | [Semantic Transcript Search](./02-Semantic-Transcript-Search/scratchpad.md) | 🟡 In Progress | High | 2025-01-12 |
 | 03 | (Reserved) | ⚪ Not Started | - | - |
 | 04 | (Reserved) | ⚪ Not Started | - | - |
 | 05 | (Reserved) | ⚪ Not Started | - | - |
@@ -23,7 +23,8 @@
 
 ## Status Legend
 
-- 🟢 **Complete** — Goal achieved and verified
+- 🟢 **Complete** — Goal achieved AND validated by user in real environment
+- 🟠 **Implemented** — Code complete, tests passing, NOT yet user-validated
 - 🟡 **In Progress** — Actively being worked on
 - 🔴 **Blocked** — Waiting on external dependency or decision
 - ⚪ **Not Started** — Planned but not yet begun
@@ -56,6 +57,20 @@
 ---
 
 ## Recent Activity
+
+### 2025-01-12
+- **Goal 02 Planning**: Semantic Transcript Search
+  - Architecture defined: LangChain-based with Matryoshka embeddings
+  - Verified latest APIs: langchain-chroma 1.1.0, langchain-nomic 1.0.1, chromadb 1.4.0
+  - 10 tasks planned, ready for implementation
+  - Target version: 0.0.2
+
+### 2025-01-11
+- **Goal 01 Implemented**: Production YouTube MCP MVP
+  - v0.0.0 and v0.0.1 published to PyPI as `yt-api-mcp`
+  - 16 YouTube tools working (search, metadata, transcripts, comments, live)
+  - 178 tests, 76% coverage
+  - Awaiting broader user validation
 
 ### 2025-01-08
 - **Goal 01 Created**: Production YouTube MCP MVP
