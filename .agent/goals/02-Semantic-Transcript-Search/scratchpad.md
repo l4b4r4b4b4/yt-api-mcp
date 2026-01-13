@@ -295,7 +295,7 @@ langchain-core = ">=1.0.0"
 | Task-01 | Setup: Add LangChain dependencies, create module structure | 🟠 | Done, awaiting validation |
 | Task-02 | Embeddings: Configure Nomic Matryoshka embeddings | 🟠 | Done, tests added |
 | Task-03 | Vector Store: Initialize Chroma with HNSW settings | 🟠 | Done, tests added |
-| Task-04 | Chunker: Transcript-aware splitter with timestamps | ⚪ | Preserve metadata |
+| Task-04 | Chunker: Transcript-aware splitter with timestamps | 🟡 | WIP, needs chapter awareness + tests |
 | Task-05 | Indexer: Batch indexing logic with progress | ⚪ | Error handling |
 | Task-06 | Tool: `index_channel_transcripts` MCP tool | ⚪ | RefCache integration |
 | Task-07 | Tool: `semantic_search_transcripts` MCP tool | ⚪ | Filters, scoring |
