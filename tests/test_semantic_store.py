@@ -182,7 +182,10 @@ class TestVectorStoreIntegration:
     @pytest.mark.slow
     def test_in_memory_store_operations(self) -> None:
         """Test basic operations with in-memory store."""
-        config = SemanticSearchConfig(persist_directory=None)
+        config = SemanticSearchConfig(
+            persist_directory=None,
+            collection_name="test_in_memory_ops",
+        )
         store = create_vector_store(config)
 
         # Add documents
@@ -209,7 +212,10 @@ class TestVectorStoreIntegration:
     @pytest.mark.slow
     def test_metadata_filtering(self) -> None:
         """Test that metadata filtering works correctly."""
-        config = SemanticSearchConfig(persist_directory=None)
+        config = SemanticSearchConfig(
+            persist_directory=None,
+            collection_name="test_metadata_filtering",
+        )
         store = create_vector_store(config)
 
         texts = [
@@ -263,7 +269,10 @@ class TestVectorStoreIntegration:
     @pytest.mark.slow
     def test_similarity_search_with_score(self) -> None:
         """Test similarity search returns scores."""
-        config = SemanticSearchConfig(persist_directory=None)
+        config = SemanticSearchConfig(
+            persist_directory=None,
+            collection_name="test_similarity_with_score",
+        )
         store = create_vector_store(config)
 
         texts = [
