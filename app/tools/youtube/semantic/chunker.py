@@ -361,6 +361,8 @@ class TranscriptChunker:
 
         # Build metadata
         metadata: dict[str, Any] = {
+            # Content type discriminator
+            "content_type": "transcript",
             # Video identifiers
             "video_id": video_id,
             "channel_id": video_metadata.get("channel_id", ""),

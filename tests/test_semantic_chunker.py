@@ -222,6 +222,19 @@ class TestBasicChunking:
         # With overlap, some content should appear in multiple chunks
         assert len(result) >= 2
 
+    def test_metadata_includes_content_type(
+        self, mock_tokenizer: MagicMock, video_metadata: dict[str, str]
+    ) -> None:
+        """Test that metadata includes content_type discriminator."""
+        config = SemanticSearchConfig(chunk_size=100)
+        chunker = TranscriptChunker(config, tokenizer=mock_tokenizer)
+
+        entries = [{"text": "Test content", "start": 0.0, "duration": 1.0}]
+        result = chunker.chunk_transcript(entries, video_metadata)
+
+        metadata = result[0].metadata
+        assert metadata["content_type"] == "transcript"
+
     def test_metadata_includes_video_info(
         self, mock_tokenizer: MagicMock, video_metadata: dict[str, str]
     ) -> None:
