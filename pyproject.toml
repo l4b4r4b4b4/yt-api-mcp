@@ -1,6 +1,6 @@
 [project]
 name = "yt-api-mcp"
-version = "0.0.1"
+version = "0.0.2"
 description = "FastMCP server template with mcp-refcache and Langfuse tracing"
 readme = "README.md"
 authors = [
@@ -19,8 +19,15 @@ dependencies = [
     "nomic[local]>=3.9.0",
     "pydantic>=2.10.0",
     "pydantic-settings>=2.10.0",
+    "tiktoken>=0.12.0",
     "typer>=0.15.0",
     "youtube-transcript-api>=1.2.3",
+]
+
+[project.optional-dependencies]
+huggingface = [
+    "tokenizers>=0.21.0",
+    "huggingface_hub>=0.30.0",
 ]
 
 [project.scripts]

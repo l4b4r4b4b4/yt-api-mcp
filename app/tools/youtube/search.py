@@ -298,7 +298,131 @@ async def search_live_videos(query: str, max_results: int = 5) -> list[dict[str,
         raise
 
 
+async def get_channel_videos(
+    channel_id: str,
+    max_results: int = 50,
+    order: str = "date",
+) -> list[dict[str, Any]]:
+    """Fetch videos from a YouTube channel.
+
+    Retrieves a list of videos uploaded to the specified channel, sorted by
+    the specified order. Uses the YouTube Data API search endpoint with a
+    channelId filter.
+
+    Args:
+        channel_id: YouTube channel ID (e.g., "UCuAXFkgsw1L7xaCfnd5JJOw").
+        max_results: Maximum number of videos to return (clamped to 1-50).
+        order: Sort order for results. Options:
+            - "date" (default): Most recent first
+            - "rating": Highest rated first
+            - "viewCount": Most viewed first
+            - "title": Alphabetical by title
+
+    Returns:
+        List of video info dictionaries. Each contains:
+        - video_id: YouTube video ID
+        - title: Video title
+        - description: Video description snippet
+        - url: Full YouTube watch URL
+        - thumbnail: Thumbnail image URL
+        - channel_title: Name of the channel
+        - published_at: ISO 8601 publication timestamp
+
+    Raises:
+        ValueError: If channel_id is invalid format.
+        YouTubeQuotaExceededError: If API quota is exceeded.
+        YouTubeAuthError: If authentication fails.
+        YouTubeAPIError: For other API errors.
+
+    Example:
+        >>> videos = await get_channel_videos("UCuAXFkgsw1L7xaCfnd5JJOw", max_results=10)
+        >>> print(videos[0]["title"])
+        'Latest NixOS Tutorial'
+        >>> print(len(videos))
+        10
+
+    Note:
+        This function costs 100 quota units per request (same as search).
+        For indexing, the transcript fetching (via youtube-transcript-api)
+        costs 0 quota units, making batch indexing relatively quota-efficient.
+    """
+    # Validate channel_id format
+    if not channel_id or not isinstance(channel_id, str):
+        raise ValueError("channel_id must be a non-empty string")
+
+    if not channel_id.startswith("UC") or len(channel_id) != 24:
+        raise ValueError(
+            f"Invalid channel ID format: {channel_id}. "
+            "YouTube channel IDs start with 'UC' and are 24 characters long."
+        )
+
+    # Clamp max_results to valid range (YouTube API enforces 1-50)
+    max_results = max(1, min(50, max_results))
+
+    # Validate order parameter
+    valid_orders = {"date", "rating", "viewCount", "title"}
+    if order not in valid_orders:
+        logger.warning(f"Invalid order '{order}', defaulting to 'date'")
+        order = "date"
+
+    logger.info(
+        f"Fetching channel videos: channel_id={channel_id}, "
+        f"max_results={max_results}, order={order}"
+    )
+
+    try:
+        # Get authenticated YouTube service
+        youtube = get_youtube_service()
+
+        # Execute search request with channelId filter
+        request = youtube.search().list(
+            part="snippet",
+            channelId=channel_id,
+            type="video",
+            order=order,
+            maxResults=max_results,
+        )
+        response = request.execute()
+
+        # Parse results into dictionaries
+        results = []
+        for item in response.get("items", []):
+            video_id = item["id"]["videoId"]
+            snippet = item["snippet"]
+
+            # Extract thumbnail (prefer high quality, fallback to default)
+            thumbnails = snippet.get("thumbnails", {})
+            thumbnail_url = (
+                thumbnails.get("high", {}).get("url")
+                or thumbnails.get("medium", {}).get("url")
+                or thumbnails.get("default", {}).get("url", "")
+            )
+
+            # Build video result using existing model
+            video_result = VideoSearchResult(
+                title=snippet.get("title", ""),
+                description=snippet.get("description", ""),
+                video_id=video_id,
+                url=f"https://www.youtube.com/watch?v={video_id}",
+                thumbnail=thumbnail_url,
+                channel_title=snippet.get("channelTitle", ""),
+                published_at=snippet.get("publishedAt", ""),
+            )
+
+            results.append(video_result.model_dump())
+
+        logger.info(f"Found {len(results)} videos for channel: {channel_id}")
+        return results
+
+    except HttpError as e:
+        logger.error(f"YouTube API error during channel video fetch: {e}")
+        handle_youtube_api_error(e)
+        # handle_youtube_api_error always raises, but type checker needs this
+        raise
+
+
 __all__ = [
+    "get_channel_videos",
     "search_channels",
     "search_live_videos",
     "search_videos",

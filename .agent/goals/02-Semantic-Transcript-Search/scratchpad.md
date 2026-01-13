@@ -3,7 +3,7 @@
 **Status:** 🟡 In Progress
 **Priority:** High
 **Created:** 2025-01-11
-**Updated:** 2025-01-12
+**Updated:** 2025-01-14
 **Parent:** [Goals Index](../scratchpad.md)
 
 ---
@@ -295,10 +295,10 @@ langchain-core = ">=1.0.0"
 | Task-01 | Setup: Add LangChain dependencies, create module structure | 🟠 | Done, awaiting validation |
 | Task-02 | Embeddings: Configure Nomic Matryoshka embeddings | 🟠 | Done, tests added |
 | Task-03 | Vector Store: Initialize Chroma with HNSW settings | 🟠 | Done, tests added |
-| Task-04 | Chunker: Transcript-aware splitter with timestamps | 🟡 | WIP, needs chapter awareness + tests |
-| Task-05 | Indexer: Batch indexing logic with progress | ⚪ | Error handling |
-| Task-06 | Tool: `index_channel_transcripts` MCP tool | ⚪ | RefCache integration |
-| Task-07 | Tool: `semantic_search_transcripts` MCP tool | ⚪ | Filters, scoring |
+| Task-04 | Chunker: Transcript-aware splitter with timestamps | 🟠 | Token-based + chapter-aware, 68 tests |
+| Task-05 | Indexer: Batch indexing logic with progress | 🟠 | Full implementation, 44 tests |
+| Task-06 | Tool: `semantic_search_transcripts` MCP tool | 🟢 | Auto-indexing, test isolation fixed |
+| Task-07 | Tool: Additional MCP utilities | ⚪ | get_indexed_videos, delete_indexed_video |
 | Task-08 | Helper: `get_all_channel_transcripts` | ⚪ | Batch fetch |
 | Task-09 | Testing and validation | ⚪ | Unit + integration |
 | Task-10 | Documentation and release (0.0.2) | ⚪ | README, CHANGELOG |
@@ -379,6 +379,34 @@ For indexing 50 videos:
 ---
 
 ## Session Log
+
+### 2025-01-14: Task-06 Complete
+- Implemented `semantic_search_transcripts` with auto-indexing
+  - Supports `channel_ids`, `video_ids`, or both
+  - Transparently indexes missing videos before searching
+  - Returns search results with timestamps, scores, and indexing stats
+- Registered tool in `server.py` with full docstrings
+- Added 22 tests in `tests/test_semantic_tools.py`
+- **Fixed test isolation issue:**
+  - Added `clear_semantic_caches` autouse fixture to `tests/conftest.py`
+  - Clears `lru_cache` on `get_vector_store`, `get_embeddings`, `get_semantic_config`
+  - Fixed set ordering assertion in test (non-deterministic order)
+- All 334 tests pass, linting clean
+- Removed unnecessary `@lru_cache` from `get_indexer()` (caused test issues)
+
+### 2025-01-13: Task-04 & Task-05 Complete
+- Task-04: Token-based chunker with chapter awareness
+  - Created `tokenizers.py` with TokenizerProtocol, TiktokenTokenizer, HuggingFaceTokenizer
+  - Refactored chunker for token-based sizing (256 tokens default)
+  - Added chapter-aware chunking with `chapters` parameter
+  - 68 new tests, all passing
+- Task-05: Batch indexer fully implemented
+  - Created `get_channel_videos()` in `search.py`
+  - Implemented full `TranscriptIndexer` class
+  - Methods: `is_video_indexed()`, `delete_video()`, `index_video()`, `index_channel()`
+  - Added `ProgressCallback` protocol for progress tracking
+  - 44 new tests, all 312 tests passing, linting clean
+- Updated `.rules` context limit rule to 105% of soft limit
 
 ### 2025-01-12: Architecture Revision
 - Switched from custom VectorStoreProtocol to LangChain abstractions

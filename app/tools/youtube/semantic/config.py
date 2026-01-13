@@ -1,12 +1,14 @@
 """Configuration for semantic transcript search.
 
 Provides Pydantic settings for configuring:
+- Tokenizer model (tiktoken or HuggingFace)
 - Embedding model (Nomic with Matryoshka dimensionality)
 - HNSW vector index parameters
-- Text chunking settings
+- Text chunking settings (token-based)
 - Persistence options
 
 Environment Variables:
+    SEMANTIC_TOKENIZER_MODEL: Tokenizer model name (default: cl100k_base)
     SEMANTIC_EMBEDDING_MODEL: Embedding model name (default: nomic-embed-text-v1.5)
     SEMANTIC_EMBEDDING_DIMENSIONALITY: Matryoshka dimension (default: 512)
     SEMANTIC_EMBEDDING_INFERENCE_MODE: local, remote, or dynamic (default: local)
@@ -14,8 +16,8 @@ Environment Variables:
     SEMANTIC_HNSW_MAX_NEIGHBORS: HNSW M parameter (default: 48)
     SEMANTIC_HNSW_EF_CONSTRUCTION: Build-time accuracy (default: 200)
     SEMANTIC_HNSW_EF_SEARCH: Search-time accuracy (default: 128)
-    SEMANTIC_CHUNK_SIZE: Target chunk size in characters (default: 800)
-    SEMANTIC_CHUNK_OVERLAP: Overlap between chunks (default: 100)
+    SEMANTIC_CHUNK_SIZE: Target chunk size in tokens (default: 256)
+    SEMANTIC_CHUNK_OVERLAP: Overlap between chunks in tokens (default: 50)
     SEMANTIC_PERSIST_DIRECTORY: Directory for vector store persistence (optional)
 """
 
@@ -48,7 +50,7 @@ def _get_default_persist_directory() -> str | None:
 class SemanticSearchConfig(BaseSettings):
     """Configuration for semantic transcript search.
 
-    Configures embedding model, HNSW index parameters, chunking strategy,
+    Configures tokenizer, embedding model, HNSW index parameters, chunking strategy,
     and persistence options for the semantic search system.
     """
 
@@ -56,6 +58,18 @@ class SemanticSearchConfig(BaseSettings):
         env_prefix="SEMANTIC_",
         case_sensitive=False,
         extra="ignore",
+    )
+
+    # Tokenizer configuration
+    tokenizer_model: str = Field(
+        default="cl100k_base",
+        description=(
+            "Tokenizer model name. Supports:\n"
+            "- tiktoken encodings: 'cl100k_base', 'o200k_base', 'p50k_base'\n"
+            "- OpenAI models: 'gpt-4o', 'gpt-4', 'text-embedding-3-small'\n"
+            "- HuggingFace models: 'nomic-ai/nomic-embed-text-v1.5', 'meta-llama/Llama-3.1-8B'\n"
+            "Auto-detects backend based on model name format."
+        ),
     )
 
     # Embedding model configuration
@@ -109,18 +123,24 @@ class SemanticSearchConfig(BaseSettings):
         description="Search-time accuracy. Higher = better recall, slower search.",
     )
 
-    # Chunking configuration
+    # Chunking configuration (token-based)
     chunk_size: int = Field(
-        default=800,
-        ge=100,
-        le=4000,
-        description="Target chunk size in characters.",
+        default=256,
+        ge=50,
+        le=2000,
+        description=(
+            "Target chunk size in tokens. For semantic search, 256-512 tokens "
+            "provides good balance between context and precision."
+        ),
     )
     chunk_overlap: int = Field(
-        default=100,
+        default=50,
         ge=0,
         le=500,
-        description="Overlap between consecutive chunks in characters.",
+        description=(
+            "Overlap between consecutive chunks in tokens. Helps maintain "
+            "context across chunk boundaries. ~20% of chunk_size recommended."
+        ),
     )
 
     # Persistence configuration

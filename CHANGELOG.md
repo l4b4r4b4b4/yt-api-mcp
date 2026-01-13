@@ -8,13 +8,98 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Planned for Future Releases
-- Semantic search over transcript content
 - Video playlist analysis tools
 - Channel statistics trends over time
 - Batch operations for multiple videos
 - Advanced filtering options for search results
 - Community post integration
 - Video category and tag analysis
+
+---
+
+## [0.0.2] - 2025-01-14
+
+### Added
+
+#### Semantic Transcript Search (3 new tools)
+- `warmup_semantic_search` - Pre-load embedding model for faster first search
+  - Downloads Nomic Embed Text v1.5 (~270MB on first run)
+  - Initializes ChromaDB vector store
+  - Returns ready status with model info
+  - Subsequent calls are instant (model cached)
+
+- `semantic_search_transcripts` - Search transcripts with natural language
+  - **Auto-indexing**: Automatically indexes missing videos before searching
+  - Supports `channel_ids` and/or `video_ids` for flexible scoping
+  - Returns timestamped URLs for direct playback at matching segments
+  - Includes similarity scores and indexing statistics
+  - Example: "find the video about nix garbage collection keeping N generations"
+
+- `index_channel_transcripts` - Pre-index channel transcripts (optional)
+  - Bulk indexing for faster subsequent searches
+  - Useful for pre-warming cache before users search
+  - Returns detailed indexing statistics
+
+#### Embedding & Vector Store Infrastructure
+- **Nomic Embed Text v1.5** with Matryoshka dimensionality (512 dims default)
+  - Runs locally via Embed4All (no API key needed)
+  - Supports 64/128/256/512/768 dimension options
+- **ChromaDB vector store** with optimized HNSW settings
+  - `max_neighbors=48`, `ef_construction=200`, `ef_search=128`
+  - Cosine similarity for semantic matching
+  - Persistent storage in `./chroma_db`
+- **Token-based chunking** with timestamp preservation
+  - 256 tokens per chunk with 10% overlap
+  - Preserves transcript entry boundaries
+  - Maintains start/end timestamps for each chunk
+
+#### Test Infrastructure Improvements
+- Added `clear_semantic_caches` autouse fixture in `conftest.py`
+  - Clears `lru_cache` on singleton functions between tests
+  - Prevents test pollution from cached vector stores/embeddings
+- Fixed set ordering issues in semantic search tests
+  - Tests now compare sets instead of lists where order is non-deterministic
+
+### Changed
+- Server instructions updated with semantic search documentation
+- Test count increased from 178 to 334 tests
+- Code coverage maintained at 73%+
+
+### Technical Details
+
+#### New Dependencies
+```toml
+langchain-chroma = ">=1.1.0"
+langchain-core = ">=1.2.7"
+langchain-nomic = ">=1.0.1"
+langchain-text-splitters = ">=1.1.0"
+nomic[local] = ">=3.9.0"
+```
+
+#### New Module Structure
+```
+app/tools/youtube/semantic/
+├── __init__.py
+├── config.py       # SemanticSearchConfig with HNSW settings
+├── embeddings.py   # Nomic Matryoshka embeddings
+├── chunker.py      # Token-based transcript chunker
+├── store.py        # ChromaDB vector store
+├── indexer.py      # Batch indexing logic
+├── tokenizers.py   # Tiktoken/HuggingFace tokenizers
+└── tools.py        # MCP tool implementations
+```
+
+#### Performance Characteristics
+- **First search on new channel**: 1-2 minutes (indexing 50 videos)
+- **Subsequent searches**: ~100ms (already indexed)
+- **Embedding generation**: ~100ms per chunk (CPU)
+- **Storage**: ~2KB per chunk (512-dim embeddings)
+- **API quota**: ~1 unit per video (transcripts are free)
+
+### Known Limitations
+- First semantic search requires warmup (call `warmup_semantic_search` first)
+- Some videos lack transcripts (auto-generated or manual)
+- Indexing is CPU-bound (no GPU acceleration in local mode)
 
 ---
 

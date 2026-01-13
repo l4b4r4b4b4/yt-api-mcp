@@ -22,18 +22,48 @@ Example:
     ...     chunker=TranscriptChunker(config),
     ... )
     >>> result = await indexer.index_channel("UCuAXFkgsw1L7xaCfnd5JJOw")
-    >>> print(f"Indexed {result['indexed_count']} videos")
+    >>> print(f"Indexed {result.indexed_count} videos")
 """
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Protocol
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from langchain_chroma import Chroma
 
     from app.tools.youtube.semantic.chunker import TranscriptChunker
+
+logger = logging.getLogger(__name__)
+
+
+class ProgressCallback(Protocol):
+    """Protocol for progress callback functions."""
+
+    def __call__(
+        self,
+        video_id: str,
+        index: int,
+        total: int,
+        status: str,
+        chunks: int = 0,
+        error: str | None = None,
+    ) -> None:
+        """Called when progress is made on indexing.
+
+        Args:
+            video_id: The video being processed.
+            index: Current video index (0-based).
+            total: Total number of videos to process.
+            status: Status string - "started", "completed", "skipped", "error".
+            chunks: Number of chunks created (for "completed" status).
+            error: Error message (for "error" status).
+        """
+        ...
 
 
 @dataclass
@@ -71,6 +101,19 @@ class IndexingResult:
             "video_ids": self.video_ids,
         }
 
+    def merge(self, other: IndexingResult) -> None:
+        """Merge another IndexingResult into this one.
+
+        Args:
+            other: Another IndexingResult to merge in.
+        """
+        self.indexed_count += other.indexed_count
+        self.chunk_count += other.chunk_count
+        self.skipped_count += other.skipped_count
+        self.error_count += other.error_count
+        self.errors.extend(other.errors)
+        self.video_ids.extend(other.video_ids)
+
 
 class TranscriptIndexer:
     """Indexes YouTube video transcripts into a vector store.
@@ -103,6 +146,7 @@ class TranscriptIndexer:
         max_videos: int = 50,
         language: str = "en",
         force_reindex: bool = False,
+        on_progress: ProgressCallback | Callable[..., None] | None = None,
     ) -> IndexingResult:
         """Index all video transcripts from a YouTube channel.
 
@@ -114,30 +158,104 @@ class TranscriptIndexer:
             max_videos: Maximum number of videos to index (default: 50).
             language: Preferred transcript language code (default: "en").
             force_reindex: If True, re-index videos even if already indexed.
+            on_progress: Optional callback for progress updates.
 
         Returns:
             IndexingResult with counts and any errors encountered.
 
-        Raises:
-            NotImplementedError: This is a placeholder for Task-05.
+        Example:
+            >>> result = await indexer.index_channel("UCuAXFkgsw1L7xaCfnd5JJOw")
+            >>> print(f"Indexed {result.indexed_count} videos, {result.chunk_count} chunks")
         """
-        # TODO: Implement in Task-05
-        # 1. Fetch video list from channel using YouTube API
-        # 2. Check which videos are already indexed (unless force_reindex)
-        # 3. For each video:
-        #    a. Fetch transcript using youtube-transcript-api
-        #    b. Get video metadata (title, published_at, etc.)
-        #    c. Chunk transcript with TranscriptChunker
-        #    d. Add chunks to vector store
-        # 4. Track progress and errors
-        # 5. Return IndexingResult
-        raise NotImplementedError("TranscriptIndexer will be implemented in Task-05")
+        # Import here to avoid circular imports
+        from app.tools.youtube.search import get_channel_videos
+
+        logger.info(
+            f"Starting channel indexing: channel_id={channel_id}, "
+            f"max_videos={max_videos}, language={language}, force_reindex={force_reindex}"
+        )
+
+        result = IndexingResult()
+
+        try:
+            # Fetch video list from channel
+            videos = await get_channel_videos(channel_id, max_results=max_videos)
+            logger.info(f"Found {len(videos)} videos in channel {channel_id}")
+        except Exception as e:
+            error_msg = f"Failed to fetch videos from channel {channel_id}: {e!s}"
+            logger.error(error_msg)
+            result.errors.append(error_msg)
+            result.error_count = 1
+            return result
+
+        total_videos = len(videos)
+
+        # Process each video
+        for idx, video_info in enumerate(videos):
+            video_id = video_info["video_id"]
+
+            # Notify progress callback
+            if on_progress:
+                on_progress(
+                    video_id=video_id,
+                    index=idx,
+                    total=total_videos,
+                    status="started",
+                )
+
+            # Index the video
+            video_result = await self.index_video(
+                video_id=video_id,
+                language=language,
+                force_reindex=force_reindex,
+                channel_id=channel_id,
+                video_info=video_info,
+            )
+
+            # Merge results
+            result.merge(video_result)
+
+            # Notify progress callback
+            if on_progress:
+                if video_result.error_count > 0:
+                    on_progress(
+                        video_id=video_id,
+                        index=idx,
+                        total=total_videos,
+                        status="error",
+                        error=video_result.errors[0] if video_result.errors else None,
+                    )
+                elif video_result.skipped_count > 0:
+                    on_progress(
+                        video_id=video_id,
+                        index=idx,
+                        total=total_videos,
+                        status="skipped",
+                    )
+                else:
+                    on_progress(
+                        video_id=video_id,
+                        index=idx,
+                        total=total_videos,
+                        status="completed",
+                        chunks=video_result.chunk_count,
+                    )
+
+        logger.info(
+            f"Channel indexing complete: indexed={result.indexed_count}, "
+            f"chunks={result.chunk_count}, skipped={result.skipped_count}, "
+            f"errors={result.error_count}"
+        )
+
+        return result
 
     async def index_video(
         self,
         video_id: str,
         language: str = "en",
         force_reindex: bool = False,
+        channel_id: str | None = None,
+        video_info: dict[str, Any] | None = None,
     ) -> IndexingResult:
         """Index a single video's transcript.
 
@@ -145,15 +263,117 @@ class TranscriptIndexer:
             video_id: YouTube video ID to index.
             language: Preferred transcript language code (default: "en").
             force_reindex: If True, re-index even if already indexed.
+            channel_id: Optional channel ID (avoids extra API call if known).
+            video_info: Optional video metadata (avoids extra API call if known).
 
         Returns:
             IndexingResult for the single video.
 
-        Raises:
-            NotImplementedError: This is a placeholder for Task-05.
+        Example:
+            >>> result = await indexer.index_video("dQw4w9WgXcQ")
+            >>> print(f"Created {result.chunk_count} chunks")
         """
-        # TODO: Implement in Task-05
-        raise NotImplementedError("index_video will be implemented in Task-05")
+        # Import here to avoid circular imports
+        from app.tools.youtube.metadata import get_video_details
+        from app.tools.youtube.transcripts import get_full_transcript
+
+        result = IndexingResult()
+
+        logger.debug(f"Indexing video: video_id={video_id}, language={language}")
+
+        # Check if already indexed (unless force_reindex)
+        if not force_reindex and self.is_video_indexed(video_id):
+            logger.debug(f"Video {video_id} already indexed, skipping")
+            result.skipped_count = 1
+            return result
+
+        # If force_reindex, delete existing chunks first
+        if force_reindex:
+            deleted = await self.delete_video(video_id)
+            if deleted > 0:
+                logger.debug(f"Deleted {deleted} existing chunks for video {video_id}")
+
+        # Get video metadata if not provided
+        if video_info is None:
+            try:
+                video_info = await get_video_details(video_id)
+            except Exception as e:
+                error_msg = f"[{video_id}] Failed to get video details: {e!s}"
+                logger.warning(error_msg)
+                result.errors.append(error_msg)
+                result.error_count = 1
+                return result
+
+        # Get transcript
+        try:
+            transcript_data = await get_full_transcript(video_id, language=language)
+        except Exception as e:
+            error_msg = f"[{video_id}] No transcript available: {e!s}"
+            logger.warning(error_msg)
+            result.errors.append(error_msg)
+            result.error_count = 1
+            return result
+
+        # Build video metadata for chunks
+        video_metadata = {
+            "video_id": video_id,
+            "video_title": video_info.get("title", ""),
+            "channel_id": channel_id or video_info.get("channel_id", ""),
+            "channel_title": video_info.get("channel_title", ""),
+            "video_url": video_info.get(
+                "url", f"https://www.youtube.com/watch?v={video_id}"
+            ),
+            "published_at": video_info.get("published_at", ""),
+            "language": transcript_data.get("language", language),
+        }
+
+        # Chunk the transcript
+        transcript_entries = transcript_data.get("transcript", [])
+        if not transcript_entries:
+            error_msg = f"[{video_id}] Transcript is empty"
+            logger.warning(error_msg)
+            result.errors.append(error_msg)
+            result.error_count = 1
+            return result
+
+        try:
+            documents = self.chunker.chunk_transcript(
+                transcript_entries=transcript_entries,
+                video_metadata=video_metadata,
+            )
+        except Exception as e:
+            error_msg = f"[{video_id}] Failed to chunk transcript: {e!s}"
+            logger.error(error_msg)
+            result.errors.append(error_msg)
+            result.error_count = 1
+            return result
+
+        if not documents:
+            error_msg = f"[{video_id}] No chunks created from transcript"
+            logger.warning(error_msg)
+            result.errors.append(error_msg)
+            result.error_count = 1
+            return result
+
+        # Add to vector store
+        try:
+            self.vector_store.add_documents(documents)
+            logger.debug(f"Added {len(documents)} chunks for video {video_id}")
+        except Exception as e:
+            error_msg = f"[{video_id}] Failed to add to vector store: {e!s}"
+            logger.error(error_msg)
+            result.errors.append(error_msg)
+            result.error_count = 1
+            return result
+
+        # Success
+        result.indexed_count = 1
+        result.chunk_count = len(documents)
+        result.video_ids.append(video_id)
+
+        logger.info(f"Indexed video {video_id}: {len(documents)} chunks")
+
+        return result
 
     def is_video_indexed(self, video_id: str) -> bool:
         """Check if a video is already indexed in the vector store.
@@ -164,12 +384,31 @@ class TranscriptIndexer:
         Returns:
             True if the video has chunks in the vector store.
 
-        Raises:
-            NotImplementedError: This is a placeholder for Task-05.
+        Example:
+            >>> if not indexer.is_video_indexed("dQw4w9WgXcQ"):
+            ...     await indexer.index_video("dQw4w9WgXcQ")
         """
-        # TODO: Implement in Task-05
-        # Query vector store for any chunks with this video_id
-        raise NotImplementedError("is_video_indexed will be implemented in Task-05")
+        try:
+            # Access the underlying ChromaDB collection
+            collection = self.vector_store._collection
+
+            # Query for any documents with this video_id
+            # Using get() with where filter and limit for efficiency
+            results = collection.get(
+                where={"video_id": video_id},
+                limit=1,
+                include=[],  # Don't need embeddings or documents, just IDs
+            )
+
+            # If any IDs returned, video is indexed
+            has_chunks = bool(results.get("ids"))
+            logger.debug(f"Video {video_id} indexed: {has_chunks}")
+            return has_chunks
+
+        except Exception as e:
+            logger.warning(f"Error checking if video {video_id} is indexed: {e!s}")
+            # On error, assume not indexed to allow indexing attempt
+            return False
 
     async def delete_video(self, video_id: str) -> int:
         """Delete all chunks for a video from the vector store.
@@ -180,8 +419,104 @@ class TranscriptIndexer:
         Returns:
             Number of chunks deleted.
 
-        Raises:
-            NotImplementedError: This is a placeholder for Task-05.
+        Example:
+            >>> deleted = await indexer.delete_video("dQw4w9WgXcQ")
+            >>> print(f"Deleted {deleted} chunks")
         """
-        # TODO: Implement in Task-05
-        raise NotImplementedError("delete_video will be implemented in Task-05")
+        try:
+            # Access the underlying ChromaDB collection
+            collection = self.vector_store._collection
+
+            # First, count how many chunks exist
+            existing = collection.get(
+                where={"video_id": video_id},
+                include=[],  # Only need IDs
+            )
+            chunk_count = len(existing.get("ids", []))
+
+            if chunk_count == 0:
+                logger.debug(f"No chunks to delete for video {video_id}")
+                return 0
+
+            # Delete all chunks with this video_id
+            collection.delete(where={"video_id": video_id})
+
+            logger.info(f"Deleted {chunk_count} chunks for video {video_id}")
+            return chunk_count
+
+        except Exception as e:
+            logger.error(f"Error deleting video {video_id} chunks: {e!s}")
+            return 0
+
+    async def get_indexed_video_ids(self, channel_id: str | None = None) -> list[str]:
+        """Get list of video IDs that have been indexed.
+
+        Args:
+            channel_id: Optional filter by channel ID.
+
+        Returns:
+            List of unique video IDs in the index.
+
+        Example:
+            >>> video_ids = await indexer.get_indexed_video_ids("UCxyz...")
+            >>> print(f"Found {len(video_ids)} indexed videos")
+        """
+        try:
+            collection = self.vector_store._collection
+
+            # Build where filter
+            where_filter = {"channel_id": channel_id} if channel_id else None
+
+            # Get all documents (just metadata)
+            results = collection.get(
+                where=where_filter,
+                include=["metadatas"],
+            )
+
+            # Extract unique video IDs
+            video_ids = set()
+            for metadata in results.get("metadatas", []):
+                if metadata and "video_id" in metadata:
+                    video_ids.add(metadata["video_id"])
+
+            return sorted(video_ids)
+
+        except Exception as e:
+            logger.error(f"Error getting indexed video IDs: {e!s}")
+            return []
+
+    def get_chunk_count(self, video_id: str | None = None) -> int:
+        """Get count of chunks in the vector store.
+
+        Args:
+            video_id: Optional filter by video ID.
+
+        Returns:
+            Number of chunks (all or for specific video).
+
+        Example:
+            >>> total = indexer.get_chunk_count()
+            >>> per_video = indexer.get_chunk_count("dQw4w9WgXcQ")
+        """
+        try:
+            collection = self.vector_store._collection
+
+            if video_id:
+                results = collection.get(
+                    where={"video_id": video_id},
+                    include=[],
+                )
+                return len(results.get("ids", []))
+            else:
+                return collection.count()
+
+        except Exception as e:
+            logger.error(f"Error getting chunk count: {e!s}")
+            return 0
+
+
+__all__ = [
+    "IndexingResult",
+    "ProgressCallback",
+    "TranscriptIndexer",
+]

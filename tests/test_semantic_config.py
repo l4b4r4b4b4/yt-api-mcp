@@ -31,9 +31,12 @@ class TestSemanticSearchConfig:
         assert config.hnsw_ef_construction == 200
         assert config.hnsw_ef_search == 128
 
-        # Chunking defaults
-        assert config.chunk_size == 800
-        assert config.chunk_overlap == 100
+        # Tokenizer defaults
+        assert config.tokenizer_model == "cl100k_base"
+
+        # Chunking defaults (now in tokens)
+        assert config.chunk_size == 256
+        assert config.chunk_overlap == 50
 
         # Collection defaults
         assert config.collection_name == "youtube_transcripts"
@@ -43,13 +46,15 @@ class TestSemanticSearchConfig:
         config = SemanticSearchConfig(
             embedding_dimensionality=256,
             hnsw_max_neighbors=64,
-            chunk_size=1000,
+            chunk_size=500,
             collection_name="custom_collection",
+            tokenizer_model="gpt-4o",
         )
 
         assert config.embedding_dimensionality == 256
+        assert config.tokenizer_model == "gpt-4o"
         assert config.hnsw_max_neighbors == 64
-        assert config.chunk_size == 1000
+        assert config.chunk_size == 500
         assert config.collection_name == "custom_collection"
 
     def test_matryoshka_dimensionality_options(self) -> None:
@@ -150,21 +155,21 @@ class TestSemanticSearchConfig:
             SemanticSearchConfig(hnsw_max_neighbors=129)
 
     def test_chunk_size_bounds(self) -> None:
-        """Test that chunk_size respects min/max bounds."""
+        """Test that chunk_size respects min/max bounds (now in tokens)."""
         # Valid within bounds
-        config = SemanticSearchConfig(chunk_size=100)
-        assert config.chunk_size == 100
+        config = SemanticSearchConfig(chunk_size=50)
+        assert config.chunk_size == 50
 
-        config = SemanticSearchConfig(chunk_size=4000)
-        assert config.chunk_size == 4000
+        config = SemanticSearchConfig(chunk_size=2000)
+        assert config.chunk_size == 2000
 
         # Invalid below minimum
         with pytest.raises(ValueError, match="greater than or equal to"):
-            SemanticSearchConfig(chunk_size=99)
+            SemanticSearchConfig(chunk_size=49)
 
         # Invalid above maximum
         with pytest.raises(ValueError, match="less than or equal to"):
-            SemanticSearchConfig(chunk_size=4001)
+            SemanticSearchConfig(chunk_size=2001)
 
 
 class TestCreateEmbeddings:

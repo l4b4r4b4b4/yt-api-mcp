@@ -9,8 +9,8 @@
 | ID | Goal Name | Status | Priority | Last Updated |
 |----|-----------|--------|----------|--------------|
 | 01 | [Production YouTube MCP MVP](./01-Production-YouTube-MCP-MVP/scratchpad.md) | 🟠 Implemented | Critical | 2025-01-11 |
-| 02 | [Semantic Transcript Search](./02-Semantic-Transcript-Search/scratchpad.md) | 🟡 In Progress | High | 2025-01-12 |
-| 03 | (Reserved) | ⚪ Not Started | - | - |
+| 02 | [Semantic Transcript Search](./02-Semantic-Transcript-Search/scratchpad.md) | 🟡 In Progress | High | 2025-01-13 |
+| 03 | [Context Limit Research](./03-Context-Limit-Research/scratchpad.md) | 🟡 In Progress | Low | 2025-01-13 |
 | 04 | (Reserved) | ⚪ Not Started | - | - |
 | 05 | (Reserved) | ⚪ Not Started | - | - |
 | 06 | (Reserved) | ⚪ Not Started | - | - |
@@ -57,6 +57,16 @@
 ---
 
 ## Recent Activity
+
+### 2025-01-13
+- **Goal 03 Created**: Context Limit Research
+  - Track Zed vs Claude context reporting discrepancies
+  - Understand soft/hard limit behavior
+  - Inform .rules handoff guidelines
+- **Goal 02 Task-06**: Semantic Search with auto-indexing
+  - Revised approach: agent doesn't need to call "index" explicitly
+  - `semantic_search_transcripts` auto-indexes missing videos
+  - Supports multiple channels + specific videos
 
 ### 2025-01-12
 - **Goal 02 Planning**: Semantic Transcript Search
