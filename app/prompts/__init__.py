@@ -31,8 +31,21 @@ to minimize API quota usage. All operations are traced to Langfuse for observabi
    Returns channel results with names, descriptions, thumbnails, and URLs.
    Results are cached for 6 hours.
 
-3. **Paginate Large Results**
-   Use `get_cached_result` to navigate through cached results:
+3. **Retrieve Cached Results**
+   When a tool returns a `ref_id` with a preview, you have three options:
+
+   **Full retrieval** (recommended for transcripts and complete data):
+   ```
+   get_cached_result(ref_id, full=True)
+   ```
+   Returns the complete cached value with no preview truncation.
+
+   **Larger preview** (override default preview size):
+   ```
+   get_cached_result(ref_id, max_size=100000)
+   ```
+
+   **Paginate** (navigate through large collections page by page):
    ```
    get_cached_result(ref_id, page=2, page_size=20)
    ```
@@ -67,6 +80,33 @@ All tool calls are traced to Langfuse with user/session attribution.
    - Filter by User: "alice"
    - Filter by Session: "chat-001"
    - Filter by Tags: "yt-mcp", "mcprefcache", "youtube.search"
+
+## Working with Transcripts
+
+Transcripts are cached permanently since content never changes.
+
+1. **Check available languages first:**
+   ```
+   list_available_transcripts(video_id)
+   ```
+
+2. **Get the full transcript:**
+   ```
+   get_full_transcript(video_id, language="en")
+   ```
+   Small transcripts are returned directly. Large transcripts return a
+   `ref_id` with a preview.
+
+3. **Retrieve the complete transcript from cache:**
+   ```
+   get_cached_result(ref_id, full=True)
+   ```
+   This bypasses preview truncation and returns the entire transcript.
+
+4. **Fallback — paginate entry by entry:**
+   ```
+   get_transcript_chunk(video_id, start_index=0, chunk_size=50)
+   ```
 
 ---
 

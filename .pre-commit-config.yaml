@@ -37,15 +37,16 @@ repos:
         additional_dependencies: ["bandit[toml]"]
         files: ^app/
 
-  # Dependency vulnerability scanning (pip-audit works with UV projects)
-  - repo: https://github.com/pypa/pip-audit
-    rev: v2.10.0
+  # Dependency vulnerability scanning (pip-audit via uv, not pre-commit's isolated env)
+  - repo: local
     hooks:
       - id: pip-audit
-        # --local: scan installed packages in .venv
-        # --skip-editable: skip local package (not on PyPI)
-        args: [--local, --skip-editable]
+        name: pip-audit
+        # --ignore-vuln: pillow<12.0.0 pinned by langchain-nomic, can't upgrade
+        entry: uv run pip-audit --local --skip-editable --ignore-vuln CVE-2026-25990
+        language: system
         pass_filenames: false
+        always_run: true
 
 # CI configuration
 ci:
