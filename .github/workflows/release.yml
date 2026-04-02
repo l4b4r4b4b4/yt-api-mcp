@@ -1,4 +1,4 @@
-# Release Pipeline for FastMCP Template
+# Release Pipeline for yt-api-mcp
 #
 # Permissions Note:
 # workflow_run triggered workflows need explicit permissions for security-events
@@ -7,15 +7,12 @@
 # Workflow Design:
 # - Triggers AFTER CI workflow passes on main branch
 # - Triggers on semantic version tags (v*.*.*)
-# - Builds and publishes Docker images to GHCR
-# - Runs security scans on built images
+# - Builds and publishes a single Docker image to GHCR
+# - Runs security scans on the built image
 #
 # Image Tagging Strategy:
 # - On merge to main: `latest`, `sha-abc1234`
 # - On version tag (v0.0.1): `latest`, `v0.0.1`, `0.0.1`, `0.0`
-#
-# Future (dev builds on PR):
-# - `dev-latest`, `dev-v0.0.1`, `dev-sha-abc1234`
 #
 # Runner Support:
 # - Uses GitHub-hosted runners by default
@@ -58,7 +55,6 @@ concurrency:
 
 env:
   REGISTRY: ghcr.io
-  BASE_IMAGE_NAME: ${{ github.repository_owner }}/fastmcp-base
   APP_IMAGE_NAME: ${{ github.repository_owner }}/yt-mcp
 
 jobs:
@@ -72,28 +68,10 @@ jobs:
       github.event.workflow_run.conclusion == 'success'
     outputs:
       should_build: ${{ steps.check.outputs.should_build }}
-      should_build_base: ${{ steps.check.outputs.should_build_base }}
       is_release: ${{ steps.check.outputs.is_release }}
       version: ${{ steps.check.outputs.version }}
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 2
-
-      - name: Check for base image changes
-        id: base-changes
-        run: |
-          # Check if base-image-relevant files changed
-          if git diff --name-only HEAD~1 HEAD 2>/dev/null | grep -qE '^(docker/Dockerfile\.base|pyproject\.toml|uv\.lock)$'; then
-            echo "Base image files changed"
-            echo "changed=true" >> $GITHUB_OUTPUT
-          else
-            echo "No base image changes"
-            echo "changed=false" >> $GITHUB_OUTPUT
-          fi
-
       - name: Check CI status and extract version
         id: check
         run: |
@@ -118,86 +96,12 @@ jobs:
             echo "should_build=false" >> $GITHUB_OUTPUT
           fi
 
-          # Determine if base image needs rebuilding
-          # Always rebuild base on: version tags, manual trigger, or relevant file changes
-          if [[ "${{ steps.base-changes.outputs.changed }}" == "true" ]] || \
-             [[ "${{ github.event_name }}" == "push" && "${{ github.ref_type }}" == "tag" ]] || \
-             [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            echo "should_build_base=true" >> $GITHUB_OUTPUT
-          else
-            echo "should_build_base=false" >> $GITHUB_OUTPUT
-          fi
-
-  build-base:
-    name: Build Base Image
-    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
-    needs: check-ci
-    if: needs.check-ci.outputs.should_build == 'true' && needs.check-ci.outputs.should_build_base == 'true'
-    timeout-minutes: 30
-    permissions:
-      contents: read
-      packages: write
-
-    outputs:
-      base-digest: ${{ steps.build.outputs.digest }}
-      base-tags: ${{ steps.meta.outputs.tags }}
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract metadata for base image
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.BASE_IMAGE_NAME }}
-          tags: |
-            # Always include sha
-            type=sha,prefix=
-            # Latest on main branch
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' || needs.check-ci.outputs.is_release == 'false' }}
-            # Semantic version tags (v0.0.1 -> v0.0.1, 0.0.1, 0.0)
-            type=semver,pattern=v{{version}},enable=${{ needs.check-ci.outputs.is_release == 'true' }}
-            type=semver,pattern={{version}},enable=${{ needs.check-ci.outputs.is_release == 'true' }}
-            type=semver,pattern={{major}}.{{minor}},enable=${{ needs.check-ci.outputs.is_release == 'true' }}
-
-      - name: Build and push base image
-        id: build
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: docker/Dockerfile.base
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          platforms: linux/amd64,linux/arm64
-          secrets: |
-            github_token=${{ secrets.GH_PAT }}
-
   build-app:
     name: Build App Image
     runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
-    needs: [check-ci, build-base]
-    if: |
-      always() &&
-      needs.check-ci.outputs.should_build == 'true' &&
-      (needs.build-base.result == 'success' || needs.build-base.result == 'skipped')
-    timeout-minutes: 20
+    needs: check-ci
+    if: needs.check-ci.outputs.should_build == 'true'
+    timeout-minutes: 30
     permissions:
       contents: read
       packages: write
@@ -251,13 +155,13 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64,linux/arm64
-          build-args: |
-            BASE_IMAGE=${{ env.REGISTRY }}/${{ env.BASE_IMAGE_NAME }}:latest
+          secrets: |
+            github_token=${{ secrets.GH_PAT }}
 
   security-scan:
     name: Security Scan
     runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
-    needs: [check-ci, build-base, build-app]
+    needs: [check-ci, build-app]
     if: |
       always() &&
       !inputs.skip_security_scan &&
@@ -279,14 +183,6 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Run Trivy on base image
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: ${{ env.REGISTRY }}/${{ env.BASE_IMAGE_NAME }}:latest
-          format: "sarif"
-          output: "trivy-base-results.sarif"
-          severity: "CRITICAL,HIGH"
-
       - name: Run Trivy on app image
         uses: aquasecurity/trivy-action@master
         with:
@@ -294,13 +190,6 @@ jobs:
           format: "sarif"
           output: "trivy-app-results.sarif"
           severity: "CRITICAL,HIGH"
-
-      - name: Upload base image scan results
-        uses: github/codeql-action/upload-sarif@v4
-        continue-on-error: true # Don't fail if GitHub Advanced Security is not enabled
-        with:
-          sarif_file: "trivy-base-results.sarif"
-          category: "trivy-base"
 
       - name: Upload app image scan results
         uses: github/codeql-action/upload-sarif@v4
@@ -313,7 +202,7 @@ jobs:
   release-complete:
     name: Release Complete
     runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
-    needs: [check-ci, build-base, build-app, security-scan]
+    needs: [check-ci, build-app, security-scan]
     if: always() && needs.build-app.result == 'success'
 
     steps:
@@ -324,10 +213,8 @@ jobs:
           echo "### Release Info" >> $GITHUB_STEP_SUMMARY
           echo "- Version: \`${{ needs.check-ci.outputs.version }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- Is Semantic Release: \`${{ needs.check-ci.outputs.is_release }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- Base Image Rebuilt: \`${{ needs.build-base.result }}\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Images Published" >> $GITHUB_STEP_SUMMARY
-          echo "- Base: \`${{ env.REGISTRY }}/${{ env.BASE_IMAGE_NAME }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "### Image Published" >> $GITHUB_STEP_SUMMARY
           echo "- App: \`${{ env.REGISTRY }}/${{ env.APP_IMAGE_NAME }}\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Tags" >> $GITHUB_STEP_SUMMARY
