@@ -77,7 +77,11 @@ Semantic Search Tools:
 - delete_indexed_video: Remove a video from the semantic search index
 
 Cache Management:
-- get_cached_result: Retrieve or paginate through cached results
+- get_cached_result: Retrieve, paginate, or fully resolve cached results
+  - Default: returns preview (sampled/truncated for large values)
+  - full=True: returns the COMPLETE cached value via resolve (no preview truncation)
+  - max_size=N: override preview size limit (e.g. max_size=100000 for near-full content)
+  - page/page_size: paginate through large collections
 - Admin tools available for cache inspection and management
 
 Context & Tracing:
@@ -98,8 +102,10 @@ API Quota Notes:
 Transcript Notes:
 - Transcripts cached permanently (content never changes)
 - Use list_available_transcripts first to discover available languages
-- get_full_transcript may return RefCache preview for large transcripts
-- Use get_transcript_chunk for entry-by-entry pagination if needed
+- get_full_transcript may return a ref_id with preview for large transcripts
+- To get the FULL transcript from cache: get_cached_result(ref_id, full=True)
+- To get a larger preview: get_cached_result(ref_id, max_size=100000)
+- Fallback: get_transcript_chunk for entry-by-entry pagination if needed
 
 Comment Notes:
 - Returns empty list if comments disabled (not an error)

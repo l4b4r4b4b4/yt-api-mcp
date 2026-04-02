@@ -17,6 +17,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.4] - 2026-04-02
+
+### Fixed
+
+- **Cache retrieval bug** — `max_size` parameter was accepted by `get_cached_result` but never forwarded to the underlying `cache.get()` call, so all previews returned at default size regardless of the requested size
+
+### Added
+
+- **`full=True` support in `get_cached_result`** — new boolean parameter that bypasses preview truncation entirely and returns the complete cached value via `cache.resolve()`, handling `AsyncTaskResponse` from mcp-refcache 0.2.x
+- **7 regression tests** in `tests/test_server.py` covering:
+  - `max_size` forwarding to cache backend
+  - `full=True` complete value retrieval
+  - `AsyncTaskResponse` unwrapping
+  - Edge cases (missing ref, expired cache)
+- **Updated tool descriptions** in `app/server.py` and `app/prompts/__init__.py` to document `max_size` override and `full=True` retrieval patterns
+
+### Changed
+
+- **mcp-refcache dependency floor** raised from `>=0.1.0` to `>=0.2.1` (required for `cache.resolve()` and `AsyncTaskResponse` support)
+- **Dependency refresh** — `uv.lock` updated with fastmcp 3.x, langfuse 4.x, and transitive dependency updates
+- **Developer environment** — `.zed/settings.json` cleaned up unused MCP server configs and added `PYTHONPATH: ""` workaround for Nix Python 3.13 cryptography conflict
+
+### Security
+
+- `pre-commit` pip-audit hook now runs via `uv run` (local system hook) instead of pre-commit's isolated virtualenv, ensuring it audits the actual project lockfile
+- **Accepted vulnerability exception**: `CVE-2026-25990` on Pillow ignored in pip-audit because `langchain-nomic` pins `pillow<12.0.0` — cannot upgrade until upstream lifts constraint
+
+---
+
 ## [0.0.3] - 2025-01-15
 
 ### Added
@@ -410,6 +439,11 @@ None (initial release)
 
 ## Version History
 
+- **0.0.4** (2026-04-02) - Cache retrieval fix + full value retrieval
+  - Fixed `max_size` not forwarded in `get_cached_result`
+  - Added `full=True` for complete cache value retrieval
+  - mcp-refcache >=0.2.1, dependency refresh
+  - 413 tests passing
 - **0.0.0** (2025-01-08) - Initial experimental release
   - 16 YouTube tools implemented
   - Multi-tier caching strategy

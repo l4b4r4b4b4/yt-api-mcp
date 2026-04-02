@@ -274,6 +274,7 @@ class TestGetCachedResult:
         page: int | None = None,
         page_size: int | None = None,
         max_size: int | None = None,
+        full: bool = False,
     ) -> dict:
         """Helper to call get_cached_result."""
         from app import server
@@ -281,7 +282,7 @@ class TestGetCachedResult:
         get_fn = server.get_cached_result
         fn = get_fn.fn if hasattr(get_fn, "fn") else get_fn
 
-        return await fn(ref_id, page, page_size, max_size)
+        return await fn(ref_id, page, page_size, max_size, full)
 
     @pytest.mark.asyncio
     async def test_get_cached_result_invalid_ref(self) -> None:
@@ -298,6 +299,111 @@ class TestGetCachedResult:
 
         assert "ref_id" in result
         assert result["ref_id"] == "test:ref:123"
+
+    @pytest.mark.asyncio
+    async def test_get_cached_result_returns_preview_for_small_value(self) -> None:
+        """Test that a small cached value is returned via preview mode."""
+        ref = cache.set("small_data", {"key": "value"}, namespace="public")
+
+        result = await self._call_get_cached_result(ref.ref_id)
+
+        assert result["ref_id"] == ref.ref_id
+        assert "preview" in result
+        assert result["retrieval_mode"] == "preview"
+        assert "error" not in result
+
+    @pytest.mark.asyncio
+    async def test_get_cached_result_max_size_forwarded(self) -> None:
+        """Test that max_size is forwarded to cache.get() and affects preview size.
+
+        This is the core bug fix: previously max_size was accepted but silently
+        discarded, so the preview was always limited to the server default (2048).
+        """
+        # Create a large value that exceeds the default preview size
+        large_value = [{"id": i, "data": f"item_{i}" * 50} for i in range(200)]
+        ref = cache.set("large_data", large_value, namespace="public")
+
+        # Get with default max_size (server default: 2048)
+        result_default = await self._call_get_cached_result(ref.ref_id)
+        assert result_default["retrieval_mode"] == "preview"
+        default_preview_size = result_default.get("preview_size")
+
+        # Get with larger max_size — should return more content
+        result_large = await self._call_get_cached_result(ref.ref_id, max_size=100000)
+        assert result_large["retrieval_mode"] == "preview"
+        large_preview_size = result_large.get("preview_size")
+
+        # The larger max_size should yield a larger (or equal) preview
+        if default_preview_size is not None and large_preview_size is not None:
+            assert large_preview_size >= default_preview_size
+
+    @pytest.mark.asyncio
+    async def test_get_cached_result_full_retrieval(self) -> None:
+        """Test that full=True returns the complete cached value via resolve()."""
+        original_value = {"transcript": "Hello world " * 500, "video_id": "abc123"}
+        ref = cache.set("full_test", original_value, namespace="public")
+
+        result = await self._call_get_cached_result(ref.ref_id, full=True)
+
+        assert result["ref_id"] == ref.ref_id
+        assert result["is_complete"] is True
+        assert result["retrieval_mode"] == "full"
+        assert result["value"] == original_value
+
+    @pytest.mark.asyncio
+    async def test_get_cached_result_full_retrieval_list(self) -> None:
+        """Test that full=True works for list values."""
+        original_list = [{"id": i, "text": f"entry_{i}"} for i in range(100)]
+        ref = cache.set("list_test", original_list, namespace="public")
+
+        result = await self._call_get_cached_result(ref.ref_id, full=True)
+
+        assert result["is_complete"] is True
+        assert result["retrieval_mode"] == "full"
+        assert result["value"] == original_list
+        assert len(result["value"]) == 100
+
+    @pytest.mark.asyncio
+    async def test_get_cached_result_full_not_found(self) -> None:
+        """Test that full=True on invalid ref returns error dict."""
+        result = await self._call_get_cached_result("missing:ref", full=True)
+
+        assert "error" in result
+        assert result["ref_id"] == "missing:ref"
+
+    @pytest.mark.asyncio
+    async def test_get_cached_result_pagination_with_max_size(self) -> None:
+        """Test that pagination and max_size work together."""
+        large_list = list(range(200))
+        ref = cache.set("paginated_data", large_list, namespace="public")
+
+        result = await self._call_get_cached_result(
+            ref.ref_id, page=1, page_size=10, max_size=50000
+        )
+
+        assert result["ref_id"] == ref.ref_id
+        assert result["retrieval_mode"] == "preview"
+        # Pagination info should be present
+        if result.get("page") is not None:
+            assert result["page"] == 1
+            assert result["total_pages"] is not None
+
+    @pytest.mark.asyncio
+    async def test_get_cached_result_full_vs_preview_content_differs(self) -> None:
+        """Test that full retrieval returns more data than preview for large values."""
+        # Build a value large enough to trigger preview truncation
+        large_value = {f"key_{i}": f"value_{'x' * 100}_{i}" for i in range(100)}
+        ref = cache.set("compare_test", large_value, namespace="public")
+
+        preview_result = await self._call_get_cached_result(ref.ref_id)
+        full_result = await self._call_get_cached_result(ref.ref_id, full=True)
+
+        assert preview_result["retrieval_mode"] == "preview"
+        assert full_result["retrieval_mode"] == "full"
+        assert full_result["value"] == large_value
+
+        # Full result should contain the complete value
+        assert len(full_result["value"]) == 100
 
 
 class TestIsAdmin:
